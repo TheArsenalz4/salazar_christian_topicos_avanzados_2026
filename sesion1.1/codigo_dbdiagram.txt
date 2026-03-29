@@ -1,0 +1,31 @@
+TABLE Clientes {
+        ClienteID NUMBER [pk]
+        Nombre VARCHAR2(50)
+        Ciudad VARCHAR2(50)
+        FechaNacimiento DATE
+      }
+
+TABLE Pedidos {
+        PedidoID NUMBER [pk]
+        ClienteID NUMBER
+        Total NUMBER
+        FechaPedido DATE
+
+      }
+
+TABLE Productos {
+        ProductoID NUMBER [pk]
+        Nombre VARCHAR2(50)
+        Precio NUMBER
+    }
+
+TABLE DetallesPedidos {
+        DetalleID NUMBER [pk]
+        PedidoID NUMBER
+        ProductoID NUMBER
+        Cantidad NUMBER
+      }
+
+REF: DetallesPedidos.PedidoID > Pedidos.PedidoID
+REF: DetallesPedidos.ProductoID > Productos.ProductoID
+REF: Clientes.ClienteID < Pedidos.ClienteID
