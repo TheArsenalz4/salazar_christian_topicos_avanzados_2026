@@ -137,5 +137,31 @@ END;
 -- Verificar datos
 SELECT * FROM DetallesPedidos;
 
+-- SESION 2 (los comandos fueron probados directamente por la terminal SQL>)
+
+-- Realice 2 sentencias SELECT simples
+select * from curso_topicos.pedidos where total >= 600;
+select * from curso_topicos.clientes where Ciudad = 'Santiago';
+
+-- Realice 2 sentencias SELECT utilizando funciones agregadas sobre su base de datos.
+select AVG(Total) as promedio_total from curso_topicos.pedidos;
+select count(*) from curso_topicos.clientes;
+
+-- Realice 2 sentencias SELECT utilizando expresiones regulares.
+select nombre from curso_topicos.productos where REGEXP_LIKE(Nombre, '^L');
+select nombre, ciudad from curso_topicos.clientes where REGEXP_LIKE(Nombre, 'z$');
+
+-- Cree 2 vistas.
+create view historial_de_compras as 
+  select clientes.nombre, clientes.ciudad, clientes.clienteid, pedidos.pedidoid, pedidos.total, pedidos.FechaPedido 
+  from curso_topicos.clientes 
+  inner join curso_topicos.pedidos on curso_topicos.clientes.clienteid = curso_topicos.pedidos.clienteid;
+
+create view veces_productos_comprados as 
+  select productos.productoid, productos.nombre, productos.precio, SUM(DetallesPedidos.cantidad) as veces_vendido 
+  from curso_topicos.productos 
+  inner join curso_topicos.detallespedidos on curso_topicos.productos.productoid = curso_topicos.detallespedidos.productoid 
+  GROUP BY curso_topicos.productos.productoid, curso_topicos.productos.nombre, curso_topicos.productos.precio;
+
 -- Commit final
 COMMIT;
