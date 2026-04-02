@@ -164,6 +164,25 @@ create view veces_productos_comprados as
   GROUP BY curso_topicos.productos.productoid, curso_topicos.productos.nombre, curso_topicos.productos.precio;
 
 
+-- Sesion 3 avance
+
+-- Estandar de altura de edificios
+DECLARE
+    var_altura_metros_edificios := 20; -- Edificio a evaluar de 20 metros
+BEGIN
+    IF var_altura_metros_edificios > 18 THEN -- Si es mayor a 18 metros se considera Alto
+    DBMS_OUTPUT.PUT_LINE('Edificio Alto:' || var_altura_metros_edificios);
+    ELSIF var_altura_metros_edificios < 10 THEN -- SI es menor a 10 metros se considera Bajo
+    DBMS_OUTPUT.PUT_LINE('Edificio Bajo: '|| var_altura_metros_edificios);
+    ELSE
+    -- Si esta entre los rangos de 10 - 18 es Mediano
+    DBMS_OUTPUT.PUT_LINE('Edificio Mediano: ' || var_altura_metros_edificios);
+    ENDIF;
+END;
+/
+
+
+-- Sesion 4 avance
 DECLARE 
     cantidad_comprada NUMBER;
     cantidad_baja EXCEPTION;
@@ -175,5 +194,28 @@ BEGIN
 
 -- Commit final
 COMMIT;
+
+-- Sesion 5 avance
+
+-- Escribe un bloque anónimo que use un cursor explícito para listar 2 atributos de alguna clase, ordenados por uno de los atributos (numerico, alfabetico).
+
+-- AVANCE A MODIFICAR 
+DECLARE
+    cursor pedido_detalle(detalle_id NUMBER) IS
+    SELECT ProductoID, Cantidad
+    From DetallesPedidos
+    WHERE DetalleID = detalle_id;
+    var_producto_id NUMBER;
+    var_cantidad NUMBER;
+BEGIN
+    OPEN pedido_detalle(4);
+    LOOP
+    FETCH pedido_detalle INTO var_producto_id, var_cantidad;
+    EXIT WHEN pedido_detalle%NOTFOUND;
+    DBMS_OUTPUT.PUT_LINE('Producto ID: '|| var_producto_id ||', Cantidad: '|| var_cantidad);
+    END LOOP;
+    CLOSE pedido_detalle;
+EXCEPTION
+
 
 
