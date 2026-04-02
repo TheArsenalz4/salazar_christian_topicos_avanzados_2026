@@ -163,5 +163,17 @@ create view veces_productos_comprados as
   inner join curso_topicos.detallespedidos on curso_topicos.productos.productoid = curso_topicos.detallespedidos.productoid 
   GROUP BY curso_topicos.productos.productoid, curso_topicos.productos.nombre, curso_topicos.productos.precio;
 
+
+DECLARE 
+    cantidad_comprada NUMBER;
+    cantidad_baja EXCEPTION;
+BEGIN
+    select Cantidad INTO cantidad_comprada from DetallesPedidos where DetalleID = 4;
+    if cantidad_comprada < 3 THEN RAISE cantidad_baja;
+    END IF;
+
+
 -- Commit final
 COMMIT;
+
+
