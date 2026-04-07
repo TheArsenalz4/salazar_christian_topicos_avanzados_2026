@@ -168,7 +168,7 @@ create view veces_productos_comprados as
 
 -- Estandar de altura de edificios
 DECLARE
-    var_altura_metros_edificios := 20; -- Edificio a evaluar de 20 metros
+    var_altura_metros_edificios NUMBER := 20; -- Edificio a evaluar de 20 metros
 BEGIN
     IF var_altura_metros_edificios > 18 THEN -- Si es mayor a 18 metros se considera Alto
     DBMS_OUTPUT.PUT_LINE('Edificio Alto:' || var_altura_metros_edificios);
@@ -177,7 +177,7 @@ BEGIN
     ELSE
     -- Si esta entre los rangos de 10 - 18 es Mediano
     DBMS_OUTPUT.PUT_LINE('Edificio Mediano: ' || var_altura_metros_edificios);
-    ENDIF;
+    END IF;
 END;
 /
 
@@ -187,13 +187,16 @@ DECLARE
     cantidad_comprada NUMBER;
     cantidad_baja EXCEPTION;
 BEGIN
-    select Cantidad INTO cantidad_comprada from DetallesPedidos where DetalleID = 4;
+    select Cantidad INTO cantidad_comprada from DetallesPedidos where DetalleID = 15;
     if cantidad_comprada < 3 THEN RAISE cantidad_baja;
     END IF;
-
-
--- Commit final
-COMMIT;
+EXCEPTION
+    WHEN cantidad_baja then
+    DBMS_OUTPUT.PUT_LINE('La cantidad comprada para este detalle de pedido es baja');
+    WHEN NO_DATA_FOUND then 
+    DBMS_OUTPUT.PUT_LINE('Error: Producto no encontrado');
+END;
+/
 
 -- Sesion 5 avance
 
@@ -217,5 +220,6 @@ BEGIN
     CLOSE pedido_detalle;
 EXCEPTION
 
-
+-- Commit final
+COMMIT;
 
