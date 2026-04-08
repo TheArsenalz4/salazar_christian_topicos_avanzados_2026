@@ -231,22 +231,69 @@ END;
 
 -- AVANCE A MODIFICAR 
 DECLARE
-    cursor pedido_detalle(detalle_id NUMBER) IS
-    SELECT ProductoID, Cantidad
-    From DetallesPedidos
-    WHERE DetalleID = detalle_id;
-    var_producto_id NUMBER;
+    cursor pedido_detalle IS -- cursor es un puntero que procesa filas devueltas por una consulta sql
+        SELECT ProductoID, Cantidad
+        FROM DetallesPedidos
+        ORDER BY Cantidad DESC; -- ordeno numericamente
+        
+    var_producto_id NUMBER; -- variables para guardar valores del cursor
     var_cantidad NUMBER;
 BEGIN
-    OPEN pedido_detalle(4);
-    LOOP
-    FETCH pedido_detalle INTO var_producto_id, var_cantidad;
-    EXIT WHEN pedido_detalle%NOTFOUND;
-    DBMS_OUTPUT.PUT_LINE('Producto ID: '|| var_producto_id ||', Cantidad: '|| var_cantidad);
+    OPEN pedido_detalle; -- llamo al cursor
+    LOOP -- se hace un loop hasta que no se encuentren mas filas en DetallesPedidos
+        FETCH pedido_detalle INTO var_producto_id, var_cantidad; -- se procesan las filas con fetch
+        EXIT WHEN pedido_detalle%NOTFOUND;
+        
+        DBMS_OUTPUT.PUT_LINE('Producto ID: '|| var_producto_id ||', Cantidad: '|| var_cantidad);
     END LOOP;
     CLOSE pedido_detalle;
 EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Ocurrió un error leyendo el cursor: '|| SQLERRM);
+        IF pedido_detalle%ISOPEN THEN
+            CLOSE pedido_detalle;
+        END IF;
+END;
+/
 
--- Commit final
+-- Escribe un bloque anónimo que use un cursor explícito con parámetro para aumentar 
+-- un 10% el total de la suma de algún atributo numérico de un elemento de una tabla 
+-- y muestre los valores originales y actualizados. Usa FOR UPDATE.
+
+DECLARE
+    
+    CURSOR cursor_producto_actualizar(p_id NUMBER) IS  -- cursor explícito con parámetro
+        SELECT ProductoID, Nombre, Precio
+        FROM Productos
+        WHERE ProductoID = p_id
+        FOR UPDATE; -- Update actua como candado temporal
+
+    v_id Productos.ProductoID%TYPE; -- %TYPE me permite usar el tipo de dato original de la variable
+    v_nombre Productos.Nombre%TYPE;
+    v_precio_original Productos.Precio%TYPE;
+    v_precio_nuevo Productos.Precio%TYPE;
+BEGIN
+    OPEN cursor_producto_actualizar(2);
+    LOOP
+        FETCH cursor_producto_actualizar INTO v_id, v_nombre, v_precio_original;
+        EXIT WHEN cursor_producto_actualizar%NOTFOUND;
+        
+        -- se aumenta en 10% el precio origianl
+        v_precio_nuevo := v_precio_original * 1.10;
+        
+        -- se ejecuta el update
+        UPDATE Productos
+        SET Precio = v_precio_nuevo
+        WHERE CURRENT OF cursor_producto_actualizar; -- le digo que en la fila actual haga el cambio en vez de pasar el id de manera manual
+        
+        -- Mostramos resultados
+        DBMS_OUTPUT.PUT_LINE('Precio actualizado para producto: ' || v_nombre);
+        DBMS_OUTPUT.PUT_LINE('Precio original: $' || v_precio_original);
+        DBMS_OUTPUT.PUT_LINE('Precio nuevo: $' || v_precio_nuevo);
+    END LOOP;
+    CLOSE cursor_producto_actualizar;
+END;
+/
+
 COMMIT;
 
