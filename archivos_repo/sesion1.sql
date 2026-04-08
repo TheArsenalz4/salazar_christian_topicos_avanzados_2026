@@ -182,7 +182,13 @@ END;
 /
 
 
--- Sesion 4 avance
+-- Sesion 4
+
+-- 1)
+-- Escribe un bloque PL/SQL que verifique el valor numérico de una tabla. 
+-- Si el valor es menor a algún bias, lanza una excepción personalizada.
+-- a) Maneja también NO_DATA_FOUND
+
 DECLARE 
     cantidad_comprada NUMBER;
     cantidad_baja EXCEPTION;
@@ -195,6 +201,27 @@ EXCEPTION
     DBMS_OUTPUT.PUT_LINE('La cantidad comprada para este detalle de pedido es baja');
     WHEN NO_DATA_FOUND then 
     DBMS_OUTPUT.PUT_LINE('Error: Producto no encontrado');
+END;
+/
+
+-- 2)
+-- Escribe un bloque PL/SQL que intente insertar una tupla con ID duplicado
+-- a) Verifique la excepción lanzada
+-- b) Maneje la excepción
+
+-- Uso DUP_VAL_ON_INDEX de oracle para reconocer el error de id duplicado
+DECLARE
+    
+BEGIN
+    INSERT INTO Productos (ProductoID, Nombre, Precio) 
+    VALUES (1, 'Teclado', 100);
+    DBMS_OUTPUT.PUT_LINE('Teclado insertado en Productos');
+    
+EXCEPTION
+    WHEN DUP_VAL_ON_INDEX THEN
+        DBMS_OUTPUT.PUT_LINE('El ID insertado ya existe en la tabla de Productos');
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error Inesperado: ' || SQLERRM);
 END;
 /
 
