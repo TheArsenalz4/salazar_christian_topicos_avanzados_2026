@@ -295,5 +295,74 @@ BEGIN
 END;
 /
 
+
+
+-- Sesion 7
+
+-- Crea un procedimiento aumentar_precio_producto que reciba un ProductoID y un 
+-- porcentaje de aumento (como parámetros IN), y aumente el precio del producto en ese porcentaje. 
+-- Maneja la excepción si el producto no existe.
+
+CREATE OR REPLACE PROCEDURE aumentar_precio_producto(
+    p_producto_id IN NUMBER,
+    p_porcentaje  IN NUMBER
+) AS
+    v_filas_afectadas NUMBER;
+BEGIN
+    -- si llega un 10, multiplicará por 1.10
+    UPDATE Productos
+    SET Precio = Precio * (1 + (p_porcentaje / 100))
+    WHERE ProductoID = p_producto_id;
+    
+    v_filas_afectadas := SQL%ROWCOUNT;
+    
+    IF v_filas_afectadas = 0 THEN
+        RAISE NO_DATA_FOUND;
+    ELSE
+        DBMS_OUTPUT.PUT_LINE('Precio actualizado correctamente. Producto ID: ' || p_producto_id);
+    END IF;
+    
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('Error : El producto ID ' || p_producto_id || ' no existe.');
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error inesperado: ' || SQLERRM);
+END aumentar_precio_producto;
+/
+
+-- comando sql usado en git bash para comprobar procedimiento
+-- EXEC aumentar_precio_producto(1, 15);
+
+
+-- Crea un procedimiento contar_pedidos_cliente que reciba un ClienteID (parámetro IN) 
+-- y devuelva la cantidad de pedidos de ese cliente (parámetro OUT). 
+-- Si el cliente no tiene pedidos, devuelve 0.
+
+CREATE OR REPLACE PROCEDURE contar_pedidos_cliente(
+    p_cliente_id       IN NUMBER,
+    p_cantidad_pedidos OUT NUMBER
+) IS
+BEGIN
+   
+    SELECT COUNT(*)
+    INTO p_cantidad_pedidos
+    FROM Pedidos
+    WHERE ClienteID = p_cliente_id;
+    
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error inesperado validando cliente: ' || SQLERRM);
+END contar_pedidos_cliente;
+/
+
+-- test
+DECLARE
+    v_resultado NUMBER;
+BEGIN
+    contar_pedidos_cliente(1, v_resultado);
+    DBMS_OUTPUT.PUT_LINE('El cliente revisado tiene ' || v_resultado || ' pedidos en el sistema.');
+END;
+/
+
 COMMIT;
 
