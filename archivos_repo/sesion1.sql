@@ -295,7 +295,81 @@ BEGIN
 END;
 /
 
+-- Sesion 6
 
+-- creo el tipo objeto producto con sus atributos y una funcion
+CREATE OR REPLACE TYPE producto_obj AS OBJECT (
+    producto_id NUMBER,
+    nombre VARCHAR2(50),
+    precio NUMBER,
+    MEMBER FUNCTION get_info RETURN VARCHAR2 -- funcion que retorna info del producto
+);
+/
+
+-- cuerpo de la funcion del objeto
+CREATE OR REPLACE TYPE BODY producto_obj AS
+    MEMBER FUNCTION get_info RETURN VARCHAR2 IS
+    BEGIN
+        RETURN 'ID: ' || producto_id || ', Nombre: ' || nombre;
+    END;
+END;
+/
+
+-- tabla basada en el objeto
+CREATE TABLE productos_obj OF producto_obj (producto_id PRIMARY KEY);
+INSERT INTO productos_obj VALUES (1, 'Televisor', 400);
+INSERT INTO productos_obj VALUES (2, 'Audifonos', 50);
+COMMIT;
+
+-- Escribe un bloque anónimo que use un cursor explícito basado en un objeto 
+-- para listar 2 atributos de alguna clase, ordenados por uno de los atributos.
+
+DECLARE
+    CURSOR cursor_productos IS
+        SELECT VALUE(p) FROM productos_obj p ORDER BY p.nombre ASC; -- ordeno alfabeticamente
+    v_producto producto_obj; -- variable del tipo objeto que cree arriba
+BEGIN
+    OPEN cursor_productos;
+    LOOP
+        FETCH cursor_productos INTO v_producto;
+        EXIT WHEN cursor_productos%NOTFOUND;
+        DBMS_OUTPUT.PUT_LINE(v_producto.get_info()); -- llamo a la funcion del objeto
+    END LOOP;
+    CLOSE cursor_productos;
+END;
+/
+
+-- Escribe un bloque anónimo que use un cursor explícito con parámetro basado en un objeto 
+-- para aumentar un 10% el total de la suma de algún atributo numérico de un elemento de una tabla 
+-- y muestre los valores originales y actualizados. Usa FOR UPDATE o usa función dentro del objeto
+
+DECLARE
+    CURSOR cursor_productos_upd(p_id NUMBER) IS
+        SELECT VALUE(p) FROM productos_obj p
+        WHERE p.producto_id = p_id
+        FOR UPDATE;
+    v_producto producto_obj;
+    v_precio_anterior NUMBER;
+BEGIN
+    OPEN cursor_productos_upd(1);
+    LOOP
+        FETCH cursor_productos_upd INTO v_producto;
+        EXIT WHEN cursor_productos_upd%NOTFOUND;
+
+        v_precio_anterior := v_producto.precio; -- guardo el precio antes de cambiarlo
+        v_producto.precio := v_producto.precio * 1.10; -- le sumo el 10%
+
+        -- actualizo la fila con el objeto ya modificado
+        UPDATE productos_obj p
+        SET p = v_producto
+        WHERE CURRENT OF cursor_productos_upd;
+
+        DBMS_OUTPUT.PUT_LINE('Precio anterior: $' || v_precio_anterior);
+        DBMS_OUTPUT.PUT_LINE('Precio nuevo: $' || v_producto.precio);
+    END LOOP;
+    CLOSE cursor_productos_upd;
+END;
+/
 
 -- Sesion 7
 
