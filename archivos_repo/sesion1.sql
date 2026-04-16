@@ -390,5 +390,40 @@ BEGIN
 END;
 /
 
+
+-- Ejercicio 2
+
+-- Ejercicio 2: Escribe un cursor explícito que aumente un 15% los precios de productos con precio inferior a 1000 
+-- y maneje una excepción si falla.
+
+DECLARE CURSOR cursor_aumentar_15 IS 
+    SELECT productos.nombre, productos.precio
+    FROM Productos
+    WHERE precio < 1000
+    FOR UPDATE;
+
+    var_nombre productos.nombre%TYPE;
+    var_precio productos.precio%TYPE;
+    var_precio_nuevo productos.precio%TYPE;
+
+BEGIN
+    OPEN cursor_aumentar_15;
+    LOOP
+        FETCH
+            cursor_aumentar_15 INTO var_nombre, var_precio;
+            EXIT WHEN cursor_aumentar_15%NOTFOUND;
+
+            var_precio_nuevo := var_precio * 1.15;
+
+            UPDATE Productos SET
+            precio = var_precio_nuevo
+            WHERE CURRENT OF cursor_aumentar_15; 
+
+            DBMS_OUTPUT.PUT_LINE('Precio antiguo de ' || var_nombre || ': ' || var_precio);
+            DBMS_OUTPUT.PUT_LINE('Precio nuevo de ' || var_nombre || ': ' || var_precio_nuevo);
+    END LOOP;
+    CLOSE cursor_aumentar_15;
+END;
+/
 COMMIT;
 
