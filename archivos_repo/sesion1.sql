@@ -364,5 +364,31 @@ BEGIN
 END;
 /
 
+
+--- Ejercicios clase 16-04 sesion 8
+
+-- Ejercicio 1: Escribe un cursor explícito que liste los pedidos con total mayor a 500 
+-- y muestre el nombre del cliente asociado, usando un JOIN.
+
+DECLARE CURSOR cursor_mayor_500 IS select clientes.nombre, pedidos.total 
+    FROM Pedidos INNER JOIN Clientes ON Clientes.clienteid = Pedidos.clienteid
+    WHERE total > 500;
+
+    v_nombre_cliente clientes.nombre%TYPE;
+    v_total_cliente pedidos.total%TYPE;
+
+BEGIN
+    OPEN cursor_mayor_500;
+    LOOP
+        FETCH
+            cursor_mayor_500 INTO v_nombre_cliente, v_total_cliente;
+            EXIT WHEN cursor_mayor_500%NOTFOUND;
+            DBMS_OUTPUT.PUT_LINE('Cliente: ' || v_nombre_cliente || '- Pedido total: $' || v_total_cliente);
+    END LOOP;
+    CLOSE cursor_mayor_500;
+
+END;
+/
+
 COMMIT;
 
