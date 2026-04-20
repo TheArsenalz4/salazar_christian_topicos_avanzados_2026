@@ -438,5 +438,66 @@ BEGIN
 END;
 /
 
+
+--- Ejercicios clase 16-04 sesion 8
+
+-- Ejercicio 1: Escribe un cursor explícito que liste los pedidos con total mayor a 500 
+-- y muestre el nombre del cliente asociado, usando un JOIN.
+
+DECLARE CURSOR cursor_mayor_500 IS select clientes.nombre, pedidos.total 
+    FROM Pedidos INNER JOIN Clientes ON Clientes.clienteid = Pedidos.clienteid
+    WHERE total > 500;
+
+    v_nombre_cliente clientes.nombre%TYPE;
+    v_total_cliente pedidos.total%TYPE;
+
+BEGIN
+    OPEN cursor_mayor_500;
+    LOOP
+        FETCH
+            cursor_mayor_500 INTO v_nombre_cliente, v_total_cliente;
+            EXIT WHEN cursor_mayor_500%NOTFOUND;
+            DBMS_OUTPUT.PUT_LINE('Cliente: ' || v_nombre_cliente || '- Pedido total: $' || v_total_cliente);
+    END LOOP;
+    CLOSE cursor_mayor_500;
+
+END;
+/
+
+
+-- Ejercicio 2
+
+-- Ejercicio 2: Escribe un cursor explícito que aumente un 15% los precios de productos con precio inferior a 1000 
+-- y maneje una excepción si falla.
+
+DECLARE CURSOR cursor_aumentar_15 IS 
+    SELECT productos.nombre, productos.precio
+    FROM Productos
+    WHERE precio < 1000
+    FOR UPDATE;
+
+    var_nombre productos.nombre%TYPE;
+    var_precio productos.precio%TYPE;
+    var_precio_nuevo productos.precio%TYPE;
+
+BEGIN
+    OPEN cursor_aumentar_15;
+    LOOP
+        FETCH
+            cursor_aumentar_15 INTO var_nombre, var_precio;
+            EXIT WHEN cursor_aumentar_15%NOTFOUND;
+
+            var_precio_nuevo := var_precio * 1.15;
+
+            UPDATE Productos SET
+            precio = var_precio_nuevo
+            WHERE CURRENT OF cursor_aumentar_15; 
+
+            DBMS_OUTPUT.PUT_LINE('Precio antiguo de ' || var_nombre || ': ' || var_precio);
+            DBMS_OUTPUT.PUT_LINE('Precio nuevo de ' || var_nombre || ': ' || var_precio_nuevo);
+    END LOOP;
+    CLOSE cursor_aumentar_15;
+END;
+/
 COMMIT;
 
