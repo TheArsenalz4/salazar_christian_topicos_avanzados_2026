@@ -229,7 +229,6 @@ END;
 
 -- Escribe un bloque anónimo que use un cursor explícito para listar 2 atributos de alguna clase, ordenados por uno de los atributos (numerico, alfabetico).
 
--- AVANCE A MODIFICAR 
 DECLARE
     cursor pedido_detalle IS -- cursor es un puntero que procesa filas devueltas por una consulta sql
         SELECT ProductoID, Cantidad
