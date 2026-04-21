@@ -195,7 +195,54 @@ Escribe un bloque anónimo que use un cursor explícito basado en un objeto para
 de alguna clase, ordenados por uno de los atributos.
 */
 
+-- Paso 1 crear la plantilla del objeto con sus atributos y funciones
+create or replace type cliente_obj as OBJECT (
+    nombre VARCHAR2(50),
+    ciudad VARCHAR2(50),
+    cliente_id NUMBER,
 
+    MEMBER FUNCTION listar_2_atributos return VARCHAR2
+);
+/
+-- Paso 2 crear la logica de la funcion "listar_2_atributos"
+create or replace type BODY cliente_obj as 
+    MEMBER FUNCTION listar_2_atributos return VARCHAR2 IS
+    BEGIN  
+        RETURN 'Nombre: ' || nombre || '- Ciudad: ' || ciudad;
+    END;
+END;
+/
+-- Paso 3 crear la tabla basada en el objeto creado
+create table clientes_obj_table of cliente_obj (
+    cliente_id PRIMARY KEY
+);
+
+-- extra: agregar datos
+DELETE FROM clientes_obj_table;
+
+INSERT INTO clientes_obj_table (nombre, ciudad, cliente_id)
+    select nombre, ciudad, clienteid
+    from clientes;
+
+commit; 
+-- Paso 4 leer objeto con cursores
+DECLARE
+    var_cliente_obj cliente_obj;
+
+    cursor cliente_cursor_obj IS
+        select VALUE(c_table) from clientes_obj_table c_table
+        ORDER BY c_table.nombre; -- Es obligatorio usar VALUE con eso extraigo el objeto y lo guarda en mi variable
+    
+    BEGIN
+        OPEN cliente_cursor_obj;
+        LOOP
+            FETCH cliente_cursor_obj into var_cliente_obj;
+            EXIT WHEN cliente_cursor_obj%NOTFOUND;
+            DBMS_OUTPUT.PUT_LINE(var_cliente_obj.listar_2_atributos());
+        END LOOP;
+        CLOSE cliente_cursor_obj;
+    END;
+/
 /*
 Escribe un bloque anónimo que use un cursor explícito con parámetro basado en un objeto para 
 aumentar un 10% el total de la suma de algún atributo numérico de un elemento de una tabla y 
