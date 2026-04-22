@@ -248,8 +248,56 @@ Escribe un bloque anónimo que use un cursor explícito con parámetro basado en
 aumentar un 10% el total de la suma de algún atributo numérico de un elemento de una tabla y 
 muestre los valores originales y actualizados. Usa FOR UPDATE o usa función dentro del objeto
 */
+create or replace TYPE precio_productos as OBJECT (
+    v_id NUMBER,
+    nombre VARCHAR2(50),
+    precio NUMBER
+);
+/
 
+create table tabla_precios_obj of precio_productos (
+    v_id PRIMARY KEY
+);
+/
 
+INSERT INTO tabla_precios_obj VALUES (1, 'Teclado Gamer', 100);
+COMMIT;
+
+declare
+    precios_obj precio_productos;
+    v_precio_nuevo NUMBER;
+
+    cursor aumentar_precio(p_id NUMBER) is
+    select value(t) from tabla_precios_obj t
+    where t.v_id = p_id
+    for update;
+
+    BEGIN
+        open aumentar_precio(1);
+        LOOP
+            FETCH aumentar_precio into precios_obj;
+            EXIT WHEN aumentar_precio%NOTFOUND;
+
+            DBMS_OUTPUT.PUT_LINE('Precio anterior: $' || precios_obj.precio);
+
+            v_precio_nuevo := precios_obj.precio * 1.10;
+
+            UPDATE tabla_precios_obj
+            SET precio = v_precio_nuevo
+            WHERE current of aumentar_precio;
+            DBMS_OUTPUT.PUT_LINE('Precio nuevo: $' || v_precio_nuevo);
+        END LOOP;
+        CLOSE aumentar_precio;
+        COMMIT;
+
+    EXCEPTION
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('ERROR: ' || SQLERRM);
+            IF aumentar_precio%ISOPEN then
+                close aumentar_precio;
+            END IF;
+END;
+/
 
 
 -- 6)
