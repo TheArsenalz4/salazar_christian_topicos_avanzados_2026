@@ -583,39 +583,38 @@ END;
 -- y escribe un bloque PL/SQL con un cursor explícito que liste la información de los clientes 
 -- usando el método get_info.
 
-CREATE OR REPLACE TYPE cliente_obj AS OBJECT (
+CREATE OR REPLACE TYPE cliente_obj2 AS OBJECT (
     cliente_id NUMBER,
     nombre VARCHAR2(50),
     MEMBER FUNCTION get_info RETURN VARCHAR2
 );
 /
----
-CREATE OR REPLACE TYPE BODY cliente_obj AS
+
+CREATE OR REPLACE TYPE BODY cliente_obj2 AS
     MEMBER FUNCTION get_info RETURN VARCHAR2 IS
     BEGIN
         RETURN 'Cliente ID: ' || cliente_id || ' | Nombre: ' || nombre;
     END;
 END;
 /
----
-CREATE TABLE clientes_obj OF cliente_obj (cliente_id PRIMARY KEY);
 
-INSERT INTO clientes_obj (cliente_id, nombre)
+CREATE TABLE clientes_obj2 OF cliente_obj2 (cliente_id PRIMARY KEY);
+
+INSERT INTO clientes_obj2 (cliente_id, nombre)
 SELECT ClienteID, Nombre FROM Clientes;
 COMMIT;
----
+
 DECLARE
     CURSOR cursor_clientes_obj IS
-        SELECT VALUE(c) FROM clientes_obj c;
+        SELECT VALUE(c) FROM clientes_obj2 c;
         
-    v_cliente cliente_obj;
+    v_cliente cliente_obj2;
 BEGIN
     OPEN cursor_clientes_obj;
     LOOP
         FETCH cursor_clientes_obj INTO v_cliente;
         EXIT WHEN cursor_clientes_obj%NOTFOUND;
         
-        -- Uso del método get_info()
         DBMS_OUTPUT.PUT_LINE(v_cliente.get_info());
     END LOOP;
     CLOSE cursor_clientes_obj;
