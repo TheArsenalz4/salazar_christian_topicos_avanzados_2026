@@ -576,3 +576,54 @@ exception
         END if;
 END;
 /
+
+-- Ejercicio 5: Crea un tipo de objeto cliente_obj con los atributos cliente_id, nombre, 
+-- y un método get_info que devuelva una cadena con la información del cliente. 
+-- Crea una tabla basada en ese tipo, transfiere los datos de la tabla Clientes a esa tabla, 
+-- y escribe un bloque PL/SQL con un cursor explícito que liste la información de los clientes 
+-- usando el método get_info.
+
+CREATE OR REPLACE TYPE cliente_obj AS OBJECT (
+    cliente_id NUMBER,
+    nombre VARCHAR2(50),
+    MEMBER FUNCTION get_info RETURN VARCHAR2
+);
+/
+---
+CREATE OR REPLACE TYPE BODY cliente_obj AS
+    MEMBER FUNCTION get_info RETURN VARCHAR2 IS
+    BEGIN
+        RETURN 'Cliente ID: ' || cliente_id || ' | Nombre: ' || nombre;
+    END;
+END;
+/
+---
+CREATE TABLE clientes_obj OF cliente_obj (cliente_id PRIMARY KEY);
+
+INSERT INTO clientes_obj (cliente_id, nombre)
+SELECT ClienteID, Nombre FROM Clientes;
+COMMIT;
+---
+DECLARE
+    CURSOR cursor_clientes_obj IS
+        SELECT VALUE(c) FROM clientes_obj c;
+        
+    v_cliente cliente_obj;
+BEGIN
+    OPEN cursor_clientes_obj;
+    LOOP
+        FETCH cursor_clientes_obj INTO v_cliente;
+        EXIT WHEN cursor_clientes_obj%NOTFOUND;
+        
+        -- Uso del método get_info()
+        DBMS_OUTPUT.PUT_LINE(v_cliente.get_info());
+    END LOOP;
+    CLOSE cursor_clientes_obj;
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error: ' || SQLERRM);
+        IF cursor_clientes_obj%ISOPEN THEN
+            CLOSE cursor_clientes_obj;
+        END IF;
+END;
+/
