@@ -345,3 +345,76 @@ detalles de pedidos (DetallesPedidos) asociados a pedidos con fecha anterior al 
 */
 
 
+-------------------------------------------------------------------------------------------
+
+-- sesion 10
+
+--Ejemplo 2: Procedimiento que aplica un descuento a productos usando un bucle.
+
+-- crear procedimiento (procedure)
+CREATE OR REPLACE PROCEDURE aplicar_descuento(porcentaje IN NUMBER) AS
+    var_nuevo_precio NUMBER; -- declaro variables que usaré
+    CURSOR c_descuento IS -- se crea el cursor
+    SELECT productoid, precio -- implemento la consulta con los datos a modificar
+    FROM productos
+    FOR UPDATE;
+
+BEGIN
+    FOR cada_fila_de_productos IN c_descuento LOOP -- estructura de for loop -> FOR (fila actual) IN (nombre cursor) LOOP
+        var_nuevo_precio := cada_fila_de_productos.precio * (1 - porcentaje / 100);
+        UPDATE productos
+        SET precio = var_nuevo_precio
+        WHERE productoid = cada_fila_de_productos.productoid;
+        DBMS_OUTPUT.PUT_LINE('Producto ' || cada_fila_de_productos.productoid || '- Nuevo precio: ' || var_nuevo_precio);
+        END LOOP;
+        COMMIT;
+        
+EXCEPTION
+    WHEN OTHERS THEN
+    DBMS_OUTPUT.PUT_LINE('ERROR: ' || SQLERRM);
+    ROLLBACK;
+END;
+/
+
+EXEC aplicar_descuento(10);
+
+
+-- Crea un procedimiento actualizar_total_pedidos que reciba un ClienteID (parámetro IN) y 
+-- un porcentaje de aumento (parámetro IN con valor por defecto 10%). 
+-- Aumenta el total de todos los pedidos del cliente en el porcentaje especificado. 
+-- Usa un bucle para iterar sobre los pedidos.
+
+CREATE OR REPLACE PROCEDURE actualizar_total_pedidos(p_cliente_id IN NUMBER, p_porcentaje IN NUMBER DEFAULT 10) AS
+    v_nuevo_total NUMBER;
+    
+    CURSOR c_pedidos IS
+        SELECT PedidoID, Total 
+        FROM Pedidos 
+        WHERE ClienteID = p_cliente_id
+        FOR UPDATE; -- Bloqueamos las filas para actualizarlas de forma segura
+BEGIN
+    FOR pedido_actual IN c_pedidos LOOP
+        
+        -- Calculamos el nuevo total aumentado
+        v_nuevo_total := pedido_actual.Total * (1 + (p_porcentaje / 100));
+        
+        -- Actualizamos la fila actual donde está parado el cursor
+        UPDATE Pedidos 
+        SET Total = v_nuevo_total
+        WHERE CURRENT OF c_pedidos;
+        
+        -- Imprimimos un mensaje de confirmación (opcional)
+        DBMS_OUTPUT.PUT_LINE('Pedido ID ' || pedido_actual.PedidoID || ' actualizado. Nuevo total: $' || v_nuevo_total);
+        
+    END LOOP;
+    
+    -- Guardamos los cambios si todo sale bien
+    COMMIT;
+    
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Ocurrió un error: ' || SQLERRM);
+        ROLLBACK; -- Deshacemos todo si hay problemas
+END;
+/
+        

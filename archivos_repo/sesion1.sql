@@ -626,3 +626,80 @@ EXCEPTION
         END IF;
 END;
 /
+
+-- Sesion 10
+
+-- Crea un procedimiento actualizar_total_pedidos que reciba un ClienteID (parámetro IN) y 
+-- un porcentaje de aumento (parámetro IN con valor por defecto 10%). 
+-- Aumenta el total de todos los pedidos del cliente en el porcentaje especificado. 
+-- Usa un bucle para iterar sobre los pedidos.
+
+CREATE OR REPLACE PROCEDURE actualizar_total_pedidos(p_cliente_id IN NUMBER, p_porcentaje IN NUMBER DEFAULT 10) AS
+    v_nuevo_total NUMBER;
+    
+    CURSOR c_pedidos IS
+        SELECT pedidoid, total 
+        FROM pedidos 
+        WHERE clienteid = p_cliente_id
+        FOR UPDATE; 
+BEGIN
+    FOR pedido_actual IN c_pedidos LOOP
+        
+        v_nuevo_total := pedido_actual.total * (1 + (p_porcentaje / 100));
+        
+        UPDATE Pedidos 
+        SET total = v_nuevo_total
+        WHERE CURRENT OF c_pedidos;
+        
+        DBMS_OUTPUT.PUT_LINE('Pedido ID ' || pedido_actual.pedidoid || ' actualizado. - Nuevo total: $' || v_nuevo_total);
+        
+    END LOOP;
+    
+    COMMIT;
+    
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Ocurrió un error: ' || SQLERRM);
+        ROLLBACK; -- deshacer si ocurrio algun problema, aquí no pasó nada
+END;
+/
+
+EXEC actualizar_total_pedidos(1);
+
+-- ej 2
+
+-- Crea un procedimiento calcular_costo_detalle que reciba un DetalleID (parámetro IN) y 
+-- devuelva el costo total del detalle (parámetro IN OUT). El costo se calcula 
+-- como Precio * Cantidad (usando las tablas DetallesPedidos y Productos). 
+-- Maneja excepciones si el detalle no existe.
+
+CREATE OR REPLACE PROCEDURE calcular_costo_detalle(p_detalle_id IN NUMBER, p_costo_total IN OUT NUMBER) AS
+    var_precio NUMBER;
+    var_cantidad NUMBER;
+BEGIN
+    -- consulta con el inner join para traer precio y cantidad
+    SELECT p.Precio, dpedido.Cantidad
+    INTO var_precio, var_cantidad
+    FROM detallesPedidos dpedido
+    INNER JOIN productos p ON dpedido.ProductoID = p.ProductoID
+    WHERE dpedido.DetalleID = p_detalle_id;
+    
+    -- hago el calculo y lo guardo en el parametro de salida in out
+    p_costo_total := var_precio * var_cantidad;
+    
+    DBMS_OUTPUT.PUT_LINE('Costo calculado para detalle ' || p_detalle_id || ': $' || p_costo_total);
+    
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RAISE_APPLICATION_ERROR(-20003, 'Detalle con id: ' || p_detalle_id || ' no se encontró');        
+END;
+/
+
+DECLARE
+    v_resultado NUMBER := 0; -- variable para recibir el parámetro de salida
+BEGIN
+
+    calcular_costo_detalle(1, v_resultado);
+    calcular_costo_detalle(1234, v_resultado);
+END;
+/
