@@ -703,3 +703,71 @@ BEGIN
     calcular_costo_detalle(1234, v_resultado);
 END;
 /
+
+
+-- Sesion 11
+
+-- Una funcion siempre debe devolver un valor, a diferencia de los procedimientos almacenados
+-- usa return (tipo dato), dentro de la funcion usar return valor.
+
+-- Crea una función calcular_edad_cliente que reciba un ClienteID (parámetro IN) y 
+-- devuelva la edad del cliente en años (basado en FechaNacimiento). 
+-- Maneja excepciones si el cliente no existe.
+
+CREATE OR REPLACE FUNCTION calcular_edad_cliente(p_cliente_id IN NUMBER) 
+RETURN NUMBER AS
+    var_fecha_nac DATE; -- declaro variable para guardar la fecha traida de la bd
+    var_edad NUMBER; -- declaro variable para guardar el calculo
+BEGIN
+    -- implemento la consulta para obtener la fecha de nacimiento del cliente
+    SELECT FechaNacimiento 
+    INTO var_fecha_nac
+    FROM Clientes
+    WHERE ClienteID = p_cliente_id;
+    
+    -- hago el calculo (MONTHS_BETWEEN saca los meses, dividido en 12 nos da los años, y TRUNC le quita los decimales)
+    var_edad := TRUNC(MONTHS_BETWEEN(SYSDATE, var_fecha_nac) / 12);
+    
+    -- obligatorio devolver el resultado
+    RETURN var_edad;
+    
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RAISE_APPLICATION_ERROR(-20003, 'Cliente con ID ' || p_cliente_id || ' no encontrado.');
+
+END;
+/
+
+-- probando codigo
+DECLARE 
+    var_edad NUMBER;
+BEGIN
+    var_edad := calcular_edad_cliente(1);
+    DBMS_OUTPUT.PUT_LINE('Edad del cliente 1: ' || var_edad);
+EXCEPTION
+    WHEN OTHERS THEN
+    DBMS_OUTPUT.PUT_LINE('ERROR: ' || SQLERRM);
+END;
+/
+
+-- Crea una función obtener_precio_promedio que devuelva el precio promedio de todos 
+-- los productos. Úsala en una consulta SQL para listar los productos cuyo precio 
+-- está por encima del promedio.
+
+CREATE OR REPLACE FUNCTION obtener_precio_promedio 
+RETURN NUMBER AS
+    var_promedio NUMBER; -- declaro variable para guardar el calculo
+BEGIN
+    -- implemento la consulta usando la funcion de agregacion AVG
+    SELECT AVG(Precio) INTO var_promedio
+    FROM productos;
+    
+    -- retorno el resultado
+    RETURN var_promedio;
+END;
+/
+
+-- implemento la consulta SQL usando la funcion en la condicion WHERE mas la funcion creada
+SELECT productoid, nombre, precio 
+FROM productos 
+WHERE precio > obtener_precio_promedio();
