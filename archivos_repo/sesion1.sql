@@ -500,3 +500,79 @@ END;
 /
 COMMIT;
 
+-- Ejercicio 3: Escribe un bloque PL/SQL con un cursor explícito que liste los clientes 
+-- cuyo total de pedidos (suma de los valores de Total en la tabla Pedidos) sea mayor a 1000
+-- mostrando el nombre del cliente y el total acumulado. Usa un JOIN entre Clientes y Pedidos
+-- y agrupa los resultados con GROUP BY.
+
+DECLARE
+    cursor cursor_clientes_top is
+        select c.nombre, SUM(p.total) as total_acumulado
+        from clientes c
+        inner join pedidos p on c.clienteid = p.clienteid
+        GROUP BY c.ClienteID, c.Nombre
+        HAVING SUM(p.Total) > 1000;
+        
+    v_nombre Clientes.Nombre%TYPE;
+    v_total_acumulado NUMBER;
+begin
+    open cursor_clientes_top;
+    loop
+        fetch cursor_clientes_top into v_nombre, v_total_acumulado;
+        exit when cursor_clientes_top%NOTFOUND;
+        
+        DBMS_OUTPUT.PUT_LINE('Cliente: ' || v_nombre || ' - Total Acumulado: $' || v_total_acumulado);
+    end loop;
+    close cursor_clientes_top;
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error: ' || SQLERRM);
+        IF cursor_clientes_top%ISOPEN THEN
+            close cursor_clientes_top;
+        end IF;
+END;
+/
+
+
+-- Ejercicio 4: Escribe un bloque PL/SQL con un cursor explícito que aumente en 1 la cantidad de
+-- los detalles de pedidos (DetallesPedidos) asociados a pedidos con
+-- fecha anterior al 2 de marzo de 2025 (FechaPedido en la tabla Pedidos).
+-- Usa FOR UPDATE para bloquear las filas y maneja excepciones.
+
+declare
+    cursor cursor_detalles is
+        SELECT dp.detalleid, dp.cantidad, p.fechapedido
+        FROM detallespedidos dp
+        INNER JOIN pedidos p on dp.pedidoid = p.pedidoid
+        WHERE p.fechapedido < TO_DATE('2025-03-02', 'YYYY-MM-DD')
+        FOR UPDATE of dp.cantidad;
+        
+    var_detalle_id detallespedidos.detalleid%TYPE;
+    var_cantidad detallespedidos.cantidad%TYPE;
+    var_fecha_pedido pedidos.fechapedido%TYPE;
+    var_nueva_cantidad NUMBER;
+BEGIN
+    OPEN cursor_detalles;
+    LOOP
+        fetch cursor_detalles into var_detalle_id, var_cantidad, var_fecha_pedido;
+        exit when cursor_detalles%NOTFOUND;
+        
+        var_nueva_cantidad := var_cantidad + 1;
+        
+        update detallespedidos
+        set cantidad = var_nueva_cantidad
+        WHERE CURRENT OF cursor_detalles;
+        
+        DBMS_OUTPUT.PUT_LINE('Detalle ID: ' || var_detalle_id || ' | Cantidad anterior: ' || var_cantidad || ' | Nueva: ' || var_nueva_cantidad);
+    END LOOP;
+    CLOSE cursor_detalles;
+    
+    COMMIT;
+exception
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error: ' || SQLERRM);
+        if cursor_detalles%ISOPEN THEN
+            close cursor_detalles;
+        END if;
+END;
+/
