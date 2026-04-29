@@ -771,3 +771,74 @@ END;
 SELECT productoid, nombre, precio 
 FROM productos 
 WHERE precio > obtener_precio_promedio();
+
+-- SESION 12
+
+-- Crea una función calcular_total_con_descuento que reciba un PedidoID (parámetro IN) 
+-- y devuelva el total del pedido con un descuento del 10% si el total supera 1000. 
+-- Usa la función en un procedimiento aplicar_descuento_pedido que actualice el total del pedido.
+
+-- funcion encargada del calculo
+CREATE OR REPLACE FUNCTION calcular_total_con_descuento(p_pedido_id IN NUMBER) 
+RETURN NUMBER AS
+    var_total_actual NUMBER; 
+BEGIN
+    -- implemento la consulta para traer el total actual
+    SELECT Total 
+    INTO var_total_actual
+    FROM pedidos 
+    WHERE pedidoid = p_pedido_id;
+    
+    
+    IF var_total_actual > 1000 THEN
+        var_total_actual := var_total_actual * 0.90; -- descuento
+    END IF;
+    
+    RETURN var_total_actual;
+    
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RAISE_APPLICATION_ERROR(-20004, 'Pedido con ID ' || p_pedido_id || ' no encontrado.');
+END;
+/
+
+-- paso 2 procedimiento que actualiza la base de datos usando la funcion
+CREATE OR REPLACE PROCEDURE aplicar_descuento(p_pedido_id IN NUMBER) AS
+    var_nuevo_total NUMBER; -- declaro variable para atrapar el return de la funcion
+BEGIN
+    var_nuevo_total := calcular_total_con_descuento(p_pedido_id);
+    
+    -- actualizo la base de datos
+    UPDATE Pedidos 
+    SET Total = var_nuevo_total
+    WHERE PedidoID = p_pedido_id;
+    
+    DBMS_OUTPUT.PUT_LINE('Pedido ' || p_pedido_id || ' actualizado - Total final: $' || var_nuevo_total);
+    COMMIT; 
+    
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error: ' || SQLERRM);
+        ROLLBACK;
+END;
+/
+
+EXEC aplicar_descuento(101)
+
+-- Crea un trigger validar_cantidad_detalle que se dispare antes de insertar o actualizar 
+-- en DetallesPedidos y verifique que la Cantidad sea mayor a 0. Si no, lanza un error.
+
+CREATE OR REPLACE TRIGGER validar_cantidad_detalle
+BEFORE INSERT OR UPDATE ON DetallesPedidos
+FOR EACH ROW
+BEGIN
+    -- :NEW se usa para acceder y evaluar el dato nuevo o entrante ANTES de que se guarde oficialmente en la tabla
+    IF :NEW.Cantidad <= 0 THEN
+        RAISE_APPLICATION_ERROR(-20005, 'Error de validación: La cantidad debe ser mayor a 0. Valor ingresado: ' || :NEW.Cantidad);
+    END IF;
+END;
+/
+-- error
+INSERT INTO DetallesPedidos (DetalleID, PedidoID, ProductoID, Cantidad) VALUES (342, 101, 1, 0);
+-- no error
+INSERT INTO DetallesPedidos (DetalleID, PedidoID, ProductoID, Cantidad) VALUES (1245, 101, 1, 2);
