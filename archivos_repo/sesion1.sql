@@ -842,3 +842,98 @@ END;
 INSERT INTO DetallesPedidos (DetalleID, PedidoID, ProductoID, Cantidad) VALUES (342, 101, 1, 0);
 -- no error
 INSERT INTO DetallesPedidos (DetalleID, PedidoID, ProductoID, Cantidad) VALUES (1245, 101, 1, 2);
+
+-- SESION 13
+
+-- Crea un procedimiento actualizar_inventario_pedido que reciba un PedidoID (parámetro IN) y 
+-- reduzca la cantidad de productos en una tabla Inventario (crea la tabla si no existe) según los detalles del pedido. 
+-- Usa savepoints para manejar errores si no hay suficiente inventario.
+
+-- 1. Crear tabla Inventario si no existe
+BEGIN
+    EXECUTE IMMEDIATE 'CREATE TABLE Inventario (
+        ProductoID NUMBER PRIMARY KEY,
+        CantidadDisponible NUMBER,
+        CONSTRAINT fk_inv_producto FOREIGN KEY (ProductoID) REFERENCES Productos(ProductoID)
+    )';
+    DBMS_OUTPUT.PUT_LINE('Tabla Inventario creada.');
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLCODE = -955 THEN
+            DBMS_OUTPUT.PUT_LINE('La tabla Inventario ya existe.');
+        ELSE
+            RAISE;
+        END IF;
+END;
+/
+
+-- Insertar stock inicial en el inventario para poder probar
+BEGIN
+    DELETE FROM Inventario;
+    INSERT INTO Inventario (ProductoID, CantidadDisponible) VALUES (1, 10); -- 10 Laptops
+    INSERT INTO Inventario (ProductoID, CantidadDisponible) VALUES (2, 50); -- 50 Mouses
+    COMMIT;
+    DBMS_OUTPUT.PUT_LINE('Stock inicial cargado en Inventario.');
+END;
+/
+
+-- 2. Crear el procedimiento
+CREATE OR REPLACE PROCEDURE actualizar_inventario_pedido(p_pedido_id IN NUMBER) AS
+    v_cantidad_disponible NUMBER;
+    v_nueva_cantidad NUMBER;
+    
+    CURSOR c_detalles IS
+        SELECT ProductoID, Cantidad 
+        FROM DetallesPedidos 
+        WHERE PedidoID = p_pedido_id;
+        
+    ex_inventario_insuficiente EXCEPTION;
+BEGIN
+    -- Crear un savepoint antes de empezar a modificar el inventario
+    SAVEPOINT sp_inicio_actualizacion;
+
+    FOR detalle IN c_detalles LOOP
+        -- Obtener la cantidad actual en inventario y bloquear la fila para actualización
+        SELECT CantidadDisponible 
+        INTO v_cantidad_disponible
+        FROM Inventario 
+        WHERE ProductoID = detalle.ProductoID
+        FOR UPDATE;
+        
+        v_nueva_cantidad := v_cantidad_disponible - detalle.Cantidad;
+        
+        -- Validar si hay suficiente inventario
+        IF v_nueva_cantidad < 0 THEN
+            DBMS_OUTPUT.PUT_LINE('Error: No hay suficiente inventario para el Producto ID: ' || detalle.ProductoID);
+            RAISE ex_inventario_insuficiente;
+        END IF;
+        
+        -- Actualizar el inventario
+        UPDATE Inventario 
+        SET CantidadDisponible = v_nueva_cantidad
+        WHERE ProductoID = detalle.ProductoID;
+        
+        DBMS_OUTPUT.PUT_LINE('Producto ID ' || detalle.ProductoID || ' actualizado. Nueva cantidad disponible: ' || v_nueva_cantidad);
+    END LOOP;
+    
+    -- Si todo fue exitoso, confirmamos la transacción
+    COMMIT;
+    DBMS_OUTPUT.PUT_LINE('Inventario actualizado exitosamente para el pedido: ' || p_pedido_id);
+    
+EXCEPTION
+    WHEN ex_inventario_insuficiente THEN
+        -- Deshacer cambios hasta el savepoint si no hay inventario suficiente
+        ROLLBACK TO sp_inicio_actualizacion;
+        DBMS_OUTPUT.PUT_LINE('Se ha cancelado la actualización del inventario debido a stock insuficiente.');
+    WHEN NO_DATA_FOUND THEN
+        ROLLBACK TO sp_inicio_actualizacion;
+        DBMS_OUTPUT.PUT_LINE('Error: Producto solicitado no encontrado en el inventario.');
+    WHEN OTHERS THEN
+        -- Si hay otro error inesperado, hacemos rollback al savepoint
+        ROLLBACK TO sp_inicio_actualizacion;
+        DBMS_OUTPUT.PUT_LINE('Ocurrió un error inesperado: ' || SQLERRM);
+END;
+/
+
+-- Prueba del procedimiento (Descomentar para probar)
+-- EXEC actualizar_inventario_pedido(101);
