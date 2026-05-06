@@ -842,3 +842,72 @@ END;
 INSERT INTO DetallesPedidos (DetalleID, PedidoID, ProductoID, Cantidad) VALUES (342, 101, 1, 0);
 -- no error
 INSERT INTO DetallesPedidos (DetalleID, PedidoID, ProductoID, Cantidad) VALUES (1245, 101, 1, 2);
+
+-- SESION 13
+
+-- Crea un procedimiento actualizar_inventario_pedido que reciba un PedidoID (parámetro IN) y 
+-- reduzca la cantidad de productos en una tabla Inventario (crea la tabla si no existe) según los detalles del pedido. 
+-- Usa savepoints para manejar errores si no hay suficiente inventario.
+
+-- 1. crear la tabla
+CREATE TABLE Inventario (
+    ProductoID NUMBER PRIMARY KEY,
+    CantidadDisponible NUMBER,
+    CONSTRAINT fk_inv_producto FOREIGN KEY (ProductoID) REFERENCES Productos(ProductoID)
+);
+    
+
+INSERT INTO Inventario (ProductoID, CantidadDisponible) VALUES (1, 10); -- 10 laptops
+INSERT INTO Inventario (ProductoID, CantidadDisponible) VALUES (2, 50); -- 50 mouses
+
+
+-- 2. procedimiento
+CREATE OR REPLACE PROCEDURE actualizar_inventario_pedido(p_pedido_id IN NUMBER) AS
+    v_cantidad_disponible NUMBER;
+    v_nueva_cantidad NUMBER;
+    
+    CURSOR c_detalles IS
+        SELECT ProductoID, Cantidad 
+        FROM DetallesPedidos 
+        WHERE PedidoID = p_pedido_id;
+        
+BEGIN
+
+    FOR detalle IN c_detalles LOOP
+        SELECT CantidadDisponible 
+        INTO v_cantidad_disponible
+        FROM Inventario 
+        WHERE ProductoID = detalle.ProductoID
+        FOR UPDATE;
+        
+        SAVEPOINT antes_de_actualizar;
+        
+        v_nueva_cantidad := v_cantidad_disponible - detalle.Cantidad;
+        
+        -- validar si hay suficiente inventario
+        IF v_nueva_cantidad < 0 THEN
+            RAISE_APPLICATION_ERROR(-20001, 'No hay suficiente inventario para el Producto ID: ' || detalle.ProductoID);
+        END IF;
+        
+        UPDATE Inventario 
+        SET CantidadDisponible = v_nueva_cantidad
+        WHERE ProductoID = detalle.ProductoID;
+        
+        DBMS_OUTPUT.PUT_LINE('Producto ID ' || detalle.ProductoID || ' actualizado - Nueva cantidad disponible: ' || v_nueva_cantidad);
+    END LOOP;
+    
+    COMMIT;
+    DBMS_OUTPUT.PUT_LINE('Inventario actualizado exitosamente para el pedido: ' || p_pedido_id);
+    
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('Error: Producto solicitado no encontrado en el inventario.');
+        ROLLBACK;
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error: ' || SQLERRM);
+        ROLLBACK TO antes_de_actualizar;
+        COMMIT; -- El profe guarda los cambios de los productos exitosos antes del error
+END;
+/
+
+-- EXEC actualizar_inventario_pedido(101);
