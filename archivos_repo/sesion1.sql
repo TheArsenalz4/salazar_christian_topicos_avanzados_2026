@@ -946,3 +946,49 @@ FROM Fact_Pedidos fp
 JOIN Dim_Ciudad dc ON fp.CiudadID = dc.CiudadID
 JOIN Dim_Tiempo dt ON fp.FechaID = dt.FechaID
 GROUP BY dc.Ciudad, dt.Año;
+
+-- Sesion 14
+
+-- Crea un supertipo Vehiculo con atributos Marca y Año, y un método obtener_antiguedad. 
+-- Luego, crea un subtipo Automovil que herede de Vehiculo, con un atributo adicional 
+-- NumeroPuertas y un método descripcion que devuelva una cadena con los detalles del 
+-- automóvil.
+
+-- paso 1. crear supertipo vehiculo
+CREATE OR REPLACE TYPE Vehiculo as OBJECT (
+    Marca varchar2(50),
+    Año NUMBER, -- Cambiado a NUMBER para poder hacer la resta fácilmente
+    MEMBER FUNCTION obtener_antiguedad return NUMBER
+) NOT FINAL;
+/
+-- cuerpo del metodo
+CREATE OR REPLACE TYPE BODY Vehiculo as
+    MEMBER FUNCTION obtener_antiguedad return NUMBER IS
+    BEGIN
+        RETURN 2026 - Año;
+    END;
+END;
+/
+-- paso 2. creat subtipo automovil que herede de vehiculo
+CREATE OR REPLACE TYPE Automovil UNDER Vehiculo (
+    Numero_Puertas NUMBER,
+    MEMBER FUNCTION detalles_automovil RETURN VARCHAR2 
+);
+/
+CREATE OR REPLACE TYPE BODY Automovil AS 
+    MEMBER FUNCTION detalles_automovil RETURN VARCHAR2 IS
+    BEGIN   
+        -- se llaman a los atributos directamente, sin el nombre de la clase
+        RETURN 'Marca: ' || Marca || '- Año: ' || Año || '- Numero de puertas: ' || Numero_Puertas;
+    END;
+END;
+/
+
+-- crear tabla y probar codigo
+CREATE TABLE Vehiculo OF Vehiculo;
+
+INSERT INTO Vehiculos VALUES(Automovil('Audi', 2015, 4));
+
+SELECT v.Marca, v.obtener_antiguedad() as Antiguedad, TREAT(VALUE(V) AS Automovil).descripcion() as Descripcion
+from Vehiculos v
+WHERE VALUE(v) IS OF(Automovil);
