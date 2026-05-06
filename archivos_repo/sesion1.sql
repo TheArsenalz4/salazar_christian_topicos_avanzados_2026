@@ -911,3 +911,38 @@ END;
 /
 
 -- EXEC actualizar_inventario_pedido(101);
+
+-- Diseña una tabla de hechos Fact_Pedidos y una dimensión Dim_Ciudad para un Data Warehouse 
+-- basado en curso_topicos. Escribe una consulta analítica que muestre el total de ventas por 
+-- ciudad y año.
+
+CREATE TABLE Dim_Ciudad (
+	CiudadID NUMBER PRIMARY KEY,
+	Ciudad VARCHAR2(50)
+);
+INSERT INTO Dim_Ciudad (CiudadID, Ciudad)
+SELECT ROWNUM, Ciudad
+FROM (SELECT DISTINCT Ciudad FROM Clientes);
+
+CREATE TABLE Fact_Pedidos (
+	PedidoID NUMBER,
+	ClienteID NUMBER,
+	CiudadID NUMBER,
+	FechaID NUMBER,
+	Total NUMBER,
+	CONSTRAINT fk_pedido_cliente FOREIGN KEY (ClienteID) REFERENCES Dim_Cliente(ClienteID),
+	CONSTRAINT fk_pedido_ciudad FOREIGN KEY (CiudadID) REFERENCES Dim_Ciudad(CiudadID),
+	CONSTRAINT fk_pedido_tiempo FOREIGN KEY (FechaID) REFERENCES Dim_Tiempo(FechaID)
+);
+INSERT INTO Fact_Pedidos (PedidoID, ClienteID, CiudadID, FechaID, Total)
+SELECT p.PedidoID, p.ClienteID, dc.CiudadID, dt.FechaID, p.Total
+FROM Pedidos p
+JOIN Clientes c ON p.ClienteID = c.ClienteID
+JOIN Dim_Ciudad dc ON c.Ciudad = dc.Ciudad
+JOIN Dim_Tiempo dt ON p.FechaPedido = dt.Fecha;
+
+SELECT dc.Ciudad, dt.Año, SUM(fp.Total) AS TotalVentas
+FROM Fact_Pedidos fp
+JOIN Dim_Ciudad dc ON fp.CiudadID = dc.CiudadID
+JOIN Dim_Tiempo dt ON fp.FechaID = dt.FechaID
+GROUP BY dc.Ciudad, dt.Año;
