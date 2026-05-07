@@ -992,3 +992,45 @@ INSERT INTO Vehiculos VALUES(Automovil('Audi', 2015, 4));
 SELECT v.Marca, v.obtener_antiguedad() as Antiguedad, TREAT(VALUE(V) AS Automovil).descripcion() as Descripcion
 from Vehiculos v
 WHERE VALUE(v) IS OF(Automovil);
+
+-- Sesion 16 
+
+-- Analiza el plan de ejecución de la siguiente consulta y optimízala para que use índices y particiones.
+
+SELECT c.Nombre, COUNT(p.PedidoID) AS TotalPedidos
+FROM Clientes c, Pedidos p
+WHERE c.ClienteID = p.ClienteID
+AND c.Ciudad = 'Santiago'
+AND p.FechaPedido >= TO_DATE('2025-03-01', 'YYYY-MM-DD')
+GROUP BY c.Nombre;
+
+-- sesion 17
+
+-- Crea un usuario user_analista y un rol rol_analista. El rol debe tener permisos para 
+-- consultar (SELECT) todas las tablas de curso_topicos y 
+-- para insertar (INSERT) en la tabla Pedidos. 
+-- Asigna el rol al usuario y prueba los permisos.
+
+-- crear usuario
+CREATE USER user_vendedor IDENTIFIED BY vend123;
+GRANT CONNECT TO user_vendedor;
+
+CREATE ROLE rol_analista; -- crear rol
+
+GRANT SELECT ON CLIENTES TO rol_analista -- lo que puede hacer el rol en la bd
+GRANT SELECT ON PEDIDOS TO rol_analista -- puede ver pedidos
+GRANT INSERT ON PEDIDOS TO rol_analista -- puede agregar pedidos
+GRANT SELECT ON PRODUCTOS TO rol_analista
+GRANT SELECT ON DetallesPedidos TO rol_analista
+
+GRANT rol_analista TO user_vendedor; -- asigno el rol al usuario user_vendedor
+
+-- permisos
+CONNECT user_vendedor/vend123;
+SELECT * FROM Clientes;
+
+INSERT INTO Pedidos(PedidoID, ClienteID, Total, FechaPedido)
+VALUES (300, 1, 560, TO_DATE('2026-05-07', 'YYYY-MM-DD'));
+
+UPDATE Clientes SET Nombre = 'Martin' WHERE Cliente = 1; -- no funcionaria
+
