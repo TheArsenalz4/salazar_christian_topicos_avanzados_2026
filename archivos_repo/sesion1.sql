@@ -849,35 +849,19 @@ INSERT INTO DetallesPedidos (DetalleID, PedidoID, ProductoID, Cantidad) VALUES (
 -- reduzca la cantidad de productos en una tabla Inventario (crea la tabla si no existe) según los detalles del pedido. 
 -- Usa savepoints para manejar errores si no hay suficiente inventario.
 
--- 1. Crear tabla Inventario si no existe
-BEGIN
-    EXECUTE IMMEDIATE 'CREATE TABLE Inventario (
-        ProductoID NUMBER PRIMARY KEY,
-        CantidadDisponible NUMBER,
-        CONSTRAINT fk_inv_producto FOREIGN KEY (ProductoID) REFERENCES Productos(ProductoID)
-    )';
-    DBMS_OUTPUT.PUT_LINE('Tabla Inventario creada.');
-EXCEPTION
-    WHEN OTHERS THEN
-        IF SQLCODE = -955 THEN
-            DBMS_OUTPUT.PUT_LINE('La tabla Inventario ya existe.');
-        ELSE
-            RAISE;
-        END IF;
-END;
-/
+-- 1. crear la tabla
+CREATE TABLE Inventario (
+    ProductoID NUMBER PRIMARY KEY,
+    CantidadDisponible NUMBER,
+    CONSTRAINT fk_inv_producto FOREIGN KEY (ProductoID) REFERENCES Productos(ProductoID)
+);
+    
 
--- Insertar stock inicial en el inventario para poder probar
-BEGIN
-    DELETE FROM Inventario;
-    INSERT INTO Inventario (ProductoID, CantidadDisponible) VALUES (1, 10); -- 10 Laptops
-    INSERT INTO Inventario (ProductoID, CantidadDisponible) VALUES (2, 50); -- 50 Mouses
-    COMMIT;
-    DBMS_OUTPUT.PUT_LINE('Stock inicial cargado en Inventario.');
-END;
-/
+INSERT INTO Inventario (ProductoID, CantidadDisponible) VALUES (1, 10); -- 10 laptops
+INSERT INTO Inventario (ProductoID, CantidadDisponible) VALUES (2, 50); -- 50 mouses
 
--- 2. Crear el procedimiento
+
+-- 2. procedimiento
 CREATE OR REPLACE PROCEDURE actualizar_inventario_pedido(p_pedido_id IN NUMBER) AS
     v_cantidad_disponible NUMBER;
     v_nueva_cantidad NUMBER;
@@ -887,53 +871,124 @@ CREATE OR REPLACE PROCEDURE actualizar_inventario_pedido(p_pedido_id IN NUMBER) 
         FROM DetallesPedidos 
         WHERE PedidoID = p_pedido_id;
         
-    ex_inventario_insuficiente EXCEPTION;
 BEGIN
-    -- Crear un savepoint antes de empezar a modificar el inventario
-    SAVEPOINT sp_inicio_actualizacion;
 
     FOR detalle IN c_detalles LOOP
-        -- Obtener la cantidad actual en inventario y bloquear la fila para actualización
         SELECT CantidadDisponible 
         INTO v_cantidad_disponible
         FROM Inventario 
         WHERE ProductoID = detalle.ProductoID
         FOR UPDATE;
         
+        SAVEPOINT antes_de_actualizar;
+        
         v_nueva_cantidad := v_cantidad_disponible - detalle.Cantidad;
         
-        -- Validar si hay suficiente inventario
+        -- validar si hay suficiente inventario
         IF v_nueva_cantidad < 0 THEN
-            DBMS_OUTPUT.PUT_LINE('Error: No hay suficiente inventario para el Producto ID: ' || detalle.ProductoID);
-            RAISE ex_inventario_insuficiente;
+            RAISE_APPLICATION_ERROR(-20001, 'No hay suficiente inventario para el Producto ID: ' || detalle.ProductoID);
         END IF;
         
-        -- Actualizar el inventario
         UPDATE Inventario 
         SET CantidadDisponible = v_nueva_cantidad
         WHERE ProductoID = detalle.ProductoID;
         
-        DBMS_OUTPUT.PUT_LINE('Producto ID ' || detalle.ProductoID || ' actualizado. Nueva cantidad disponible: ' || v_nueva_cantidad);
+        DBMS_OUTPUT.PUT_LINE('Producto ID ' || detalle.ProductoID || ' actualizado - Nueva cantidad disponible: ' || v_nueva_cantidad);
     END LOOP;
     
-    -- Si todo fue exitoso, confirmamos la transacción
     COMMIT;
     DBMS_OUTPUT.PUT_LINE('Inventario actualizado exitosamente para el pedido: ' || p_pedido_id);
     
 EXCEPTION
-    WHEN ex_inventario_insuficiente THEN
-        -- Deshacer cambios hasta el savepoint si no hay inventario suficiente
-        ROLLBACK TO sp_inicio_actualizacion;
-        DBMS_OUTPUT.PUT_LINE('Se ha cancelado la actualización del inventario debido a stock insuficiente.');
     WHEN NO_DATA_FOUND THEN
-        ROLLBACK TO sp_inicio_actualizacion;
         DBMS_OUTPUT.PUT_LINE('Error: Producto solicitado no encontrado en el inventario.');
+        ROLLBACK;
     WHEN OTHERS THEN
-        -- Si hay otro error inesperado, hacemos rollback al savepoint
-        ROLLBACK TO sp_inicio_actualizacion;
-        DBMS_OUTPUT.PUT_LINE('Ocurrió un error inesperado: ' || SQLERRM);
+        DBMS_OUTPUT.PUT_LINE('Error: ' || SQLERRM);
+        ROLLBACK TO antes_de_actualizar;
+        COMMIT; -- El profe guarda los cambios de los productos exitosos antes del error
 END;
 /
 
--- Prueba del procedimiento (Descomentar para probar)
 -- EXEC actualizar_inventario_pedido(101);
+
+-- Diseña una tabla de hechos Fact_Pedidos y una dimensión Dim_Ciudad para un Data Warehouse 
+-- basado en curso_topicos. Escribe una consulta analítica que muestre el total de ventas por 
+-- ciudad y año.
+
+CREATE TABLE Dim_Ciudad (
+	CiudadID NUMBER PRIMARY KEY,
+	Ciudad VARCHAR2(50)
+);
+INSERT INTO Dim_Ciudad (CiudadID, Ciudad)
+SELECT ROWNUM, Ciudad
+FROM (SELECT DISTINCT Ciudad FROM Clientes);
+
+CREATE TABLE Fact_Pedidos (
+	PedidoID NUMBER,
+	ClienteID NUMBER,
+	CiudadID NUMBER,
+	FechaID NUMBER,
+	Total NUMBER,
+	CONSTRAINT fk_pedido_cliente FOREIGN KEY (ClienteID) REFERENCES Dim_Cliente(ClienteID),
+	CONSTRAINT fk_pedido_ciudad FOREIGN KEY (CiudadID) REFERENCES Dim_Ciudad(CiudadID),
+	CONSTRAINT fk_pedido_tiempo FOREIGN KEY (FechaID) REFERENCES Dim_Tiempo(FechaID)
+);
+INSERT INTO Fact_Pedidos (PedidoID, ClienteID, CiudadID, FechaID, Total)
+SELECT p.PedidoID, p.ClienteID, dc.CiudadID, dt.FechaID, p.Total
+FROM Pedidos p
+JOIN Clientes c ON p.ClienteID = c.ClienteID
+JOIN Dim_Ciudad dc ON c.Ciudad = dc.Ciudad
+JOIN Dim_Tiempo dt ON p.FechaPedido = dt.Fecha;
+
+SELECT dc.Ciudad, dt.Año, SUM(fp.Total) AS TotalVentas
+FROM Fact_Pedidos fp
+JOIN Dim_Ciudad dc ON fp.CiudadID = dc.CiudadID
+JOIN Dim_Tiempo dt ON fp.FechaID = dt.FechaID
+GROUP BY dc.Ciudad, dt.Año;
+
+-- Sesion 14
+
+-- Crea un supertipo Vehiculo con atributos Marca y Año, y un método obtener_antiguedad. 
+-- Luego, crea un subtipo Automovil que herede de Vehiculo, con un atributo adicional 
+-- NumeroPuertas y un método descripcion que devuelva una cadena con los detalles del 
+-- automóvil.
+
+-- paso 1. crear supertipo vehiculo
+CREATE OR REPLACE TYPE Vehiculo as OBJECT (
+    Marca varchar2(50),
+    Año NUMBER, -- Cambiado a NUMBER para poder hacer la resta fácilmente
+    MEMBER FUNCTION obtener_antiguedad return NUMBER
+) NOT FINAL;
+/
+-- cuerpo del metodo
+CREATE OR REPLACE TYPE BODY Vehiculo as
+    MEMBER FUNCTION obtener_antiguedad return NUMBER IS
+    BEGIN
+        RETURN 2026 - Año;
+    END;
+END;
+/
+-- paso 2. creat subtipo automovil que herede de vehiculo
+CREATE OR REPLACE TYPE Automovil UNDER Vehiculo (
+    Numero_Puertas NUMBER,
+    MEMBER FUNCTION detalles_automovil RETURN VARCHAR2 
+);
+/
+CREATE OR REPLACE TYPE BODY Automovil AS 
+    MEMBER FUNCTION detalles_automovil RETURN VARCHAR2 IS
+    BEGIN   
+        -- se llaman a los atributos directamente, sin el nombre de la clase
+        RETURN 'Marca: ' || Marca || '- Año: ' || Año || '- Numero de puertas: ' || Numero_Puertas;
+    END;
+END;
+/
+
+-- crear tabla y probar codigo
+CREATE TABLE Vehiculo OF Vehiculo;
+
+INSERT INTO Vehiculos VALUES(Automovil('Audi', 2015, 4));
+
+SELECT v.Marca, v.obtener_antiguedad() as Antiguedad, TREAT(VALUE(V) AS Automovil).descripcion() as Descripcion
+from Vehiculos v
+WHERE VALUE(v) IS OF(Automovil);
