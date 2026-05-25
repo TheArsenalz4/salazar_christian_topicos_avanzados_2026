@@ -1011,26 +1011,43 @@ GROUP BY c.Nombre;
 -- para insertar (INSERT) en la tabla Pedidos. 
 -- Asigna el rol al usuario y prueba los permisos.
 
--- crear usuario
-CREATE USER user_vendedor IDENTIFIED BY vend123;
-GRANT CONNECT TO user_vendedor;
+-- crear usuario 
+CREATE USER user_analista IDENTIFIED BY analista123;
+GRANT CREATE SESSION TO user_analista;
 
 CREATE ROLE rol_analista; -- crear rol
 
-GRANT SELECT ON CLIENTES TO rol_analista -- lo que puede hacer el rol en la bd
-GRANT SELECT ON PEDIDOS TO rol_analista -- puede ver pedidos
-GRANT INSERT ON PEDIDOS TO rol_analista -- puede agregar pedidos
-GRANT SELECT ON PRODUCTOS TO rol_analista
-GRANT SELECT ON DetallesPedidos TO rol_analista
+GRANT SELECT ON CLIENTES TO rol_analista; -- lo que puede hacer el rol en la bd
+GRANT SELECT ON PEDIDOS TO rol_analista; -- puede ver pedidos
+GRANT INSERT ON PEDIDOS TO rol_analista; -- puede agregar pedidos
+GRANT SELECT ON PRODUCTOS TO rol_analista;
+GRANT SELECT ON DetallesPedidos TO rol_analista;
 
-GRANT rol_analista TO user_vendedor; -- asigno el rol al usuario user_vendedor
+GRANT rol_analista TO user_analista; -- asigno el rol al usuario user_analista
 
 -- permisos
-CONNECT user_vendedor/vend123;
+CONNECT user_analista/analista123;
 SELECT * FROM Clientes;
 
 INSERT INTO Pedidos(PedidoID, ClienteID, Total, FechaPedido)
 VALUES (300, 1, 560, TO_DATE('2026-05-07', 'YYYY-MM-DD'));
 
 UPDATE Clientes SET Nombre = 'Martin' WHERE Cliente = 1; -- no funcionaria
+
+-- Configura auditoría para monitorear las acciones de user_analista al consultar la tabla Clientes 
+-- y al insertar en la tabla Pedidos. Realiza algunas acciones y verifica los registros de auditoría.
+
+--  auditoria con permisos de admin
+CONNECT sys AS sysdba;
+ALTER SYSTEM SET audit_trail=DB SCOPE=SPFILE;
+
+-- auditar acciones de user_analista
+AUDIT SELECT ON Clientes BY user_analista;
+AUDIT INSERT ON Pedidos BY user_analista;
+
+-- ver registros de auditoría
+SELECT username, action_name, timestamp
+FROM dba_audit_trail
+WHERE username = 'USER_ANALISTA';
+
 
