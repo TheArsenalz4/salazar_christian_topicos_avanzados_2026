@@ -1051,3 +1051,93 @@ FROM dba_audit_trail
 WHERE username = 'USER_ANALISTA';
 
 
+--- Ejercicio repaso prueba 2
+
+-- Crea un procedimiento actualizar_precios_por_categoria que reciba un porcentaje de aumento (parámetro IN) 
+-- y aplique el aumento solo a productos cuyo precio promedio por pedido (calculado con una función) sea mayor a 500. Usa un cursor para iterar sobre los productos.
+
+-- 1. Función calcular_precio_promedio
+-- COHERENCIA: DetallesPedidos no tiene 'precio_unitario'. Hacemos JOIN con Productos para obtener el 'Precio' actual y multiplicarlo por 'Cantidad'.
+CREATE OR REPLACE FUNCTION calcular_precio_promedio (p_producto_id NUMBER) 
+RETURN NUMBER IS 
+    v_precio_promedio NUMBER := 0;
+BEGIN
+    SELECT AVG(p.Precio * d.Cantidad) INTO v_precio_promedio
+    FROM DetallesPedidos d
+    JOIN Productos p ON d.ProductoID = p.ProductoID
+    WHERE d.ProductoID = p_producto_id;
+    
+    RETURN NVL(v_precio_promedio, 0); -- Retorna 0 si no hay registros para evitar errores lógicos
+END;
+/
+
+-- 2. Procedimiento actualizar_precios_por_categoria
+-- COHERENCIA: La tabla Productos no tiene la columna 'Categoria'. 
+-- Se utiliza FOR UPDATE y WHERE CURRENT OF, junto con control transaccional (COMMIT/ROLLBACK) y manejo de excepciones.
+CREATE OR REPLACE PROCEDURE actualizar_precios_por_categoria(
+    p_porcentaje_aumento IN NUMBER
+) AS
+    -- Cursor con FOR UPDATE de Precio para evitar condiciones de carrera
+    CURSOR c_productos IS
+        SELECT ProductoID, Nombre, Precio
+        FROM Productos
+        FOR UPDATE OF Precio;
+    
+    v_precio_promedio NUMBER;
+    v_precio_nuevo    NUMBER;
+BEGIN
+    FOR producto IN c_productos LOOP
+        v_precio_promedio := calcular_precio_promedio(producto.ProductoID);
+        
+        IF v_precio_promedio > 500 THEN
+            v_precio_nuevo := producto.Precio * (1 + p_porcentaje_aumento / 100);
+            
+            -- Actualización segura y de alta performance con WHERE CURRENT OF
+            UPDATE Productos
+            SET Precio = v_precio_nuevo
+            WHERE CURRENT OF c_productos;
+            
+            -- Mensaje informativo detallado
+            DBMS_OUTPUT.PUT_LINE('Producto: ' || producto.Nombre || 
+                               ' | Precio anterior: $' || producto.Precio || 
+                               ' | Nuevo precio: $' || v_precio_nuevo);
+        END IF;
+    END LOOP;
+    
+    COMMIT; -- Confirmamos cambios si todo sale bien
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Ocurrió un error inesperado: ' || SQLERRM);
+        ROLLBACK; -- Deshacemos todo ante fallas para cuidar la integridad
+END;
+/
+
+
+-- Crea un trigger auditar_eliminacion_pedido que se dispare después de eliminar un pedido 
+-- y registre el PedidoID, ClienteID, Total y la fecha de eliminación en una tabla de auditoría AuditoriaPedidos.  
+
+-- 1. Crear tabla de auditoría AuditoriaPedidos
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE AuditoriaPedidos CASCADE CONSTRAINTS';
+EXCEPTION
+    WHEN OTHERS THEN NULL;
+END;
+/
+
+CREATE TABLE AuditoriaPedidos (
+    AuditoriaID NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    PedidoID NUMBER,
+    ClienteID NUMBER,
+    Total NUMBER,
+    FechaEliminacion DATE
+);
+
+-- 2. Trigger para auditar la eliminación
+CREATE OR REPLACE TRIGGER auditar_eliminacion_pedido
+AFTER DELETE ON Pedidos
+FOR EACH ROW
+BEGIN
+    INSERT INTO AuditoriaPedidos (PedidoID, ClienteID, Total, FechaEliminacion)
+    VALUES (:OLD.PedidoID, :OLD.ClienteID, :OLD.Total, SYSDATE);
+END;
+/
