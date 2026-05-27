@@ -1057,7 +1057,7 @@ WHERE username = 'USER_ANALISTA';
 -- y aplique el aumento solo a productos cuyo precio promedio por pedido (calculado con una función) sea mayor a 500. Usa un cursor para iterar sobre los productos.
 
 -- 1. Función calcular_precio_promedio
--- COHERENCIA: DetallesPedidos no tiene 'precio_unitario'. Hacemos JOIN con Productos para obtener el 'Precio' actual y multiplicarlo por 'Cantidad'.
+-- DetallesPedidos no tiene 'precio_unitario'. Hacemos JOIN con Productos para obtener el 'Precio' actual y multiplicarlo por 'Cantidad'.
 CREATE OR REPLACE FUNCTION calcular_precio_promedio (p_producto_id NUMBER) 
 RETURN NUMBER IS 
     v_precio_promedio NUMBER := 0;
@@ -1072,7 +1072,7 @@ END;
 /
 
 -- 2. Procedimiento actualizar_precios_por_categoria
--- COHERENCIA: La tabla Productos no tiene la columna 'Categoria'. 
+-- La tabla Productos no tiene la columna 'Categoria'. 
 -- Se utiliza FOR UPDATE y WHERE CURRENT OF, junto con control transaccional (COMMIT/ROLLBACK) y manejo de excepciones.
 CREATE OR REPLACE PROCEDURE actualizar_precios_por_categoria(
     p_porcentaje_aumento IN NUMBER
