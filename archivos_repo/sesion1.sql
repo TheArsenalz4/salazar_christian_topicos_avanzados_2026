@@ -1141,3 +1141,117 @@ BEGIN
     VALUES (:OLD.PedidoID, :OLD.ClienteID, :OLD.Total, SYSDATE);
 END;
 /
+
+-- Sesion 18
+
+-- Crea un paquete gestion_clientes con:
+-- Un procedimiento registrar_cliente que reciba ClienteID, Nombre, Ciudad y FechaNacimiento, 
+-- y valide que la fecha de nacimiento sea anterior a la fecha actual.
+-- Una función obtener_edad que reciba un ClienteID y devuelva la edad del cliente.
+-- Usa una variable global para contar los clientes registrados.
+
+-- creacion de la especificacion del paquete
+CREATE OR REPLACE PACKAGE gestion_clientes AS
+    -- variable global para contar los clientes registrados
+    var_global_clientes NUMBER := 0;
+
+    -- procedimiento para registrar cliente
+    PROCEDURE registrar_cliente(
+        p_cliente_id IN NUMBER,
+        p_nombre IN VARCHAR2,
+        p_ciudad IN VARCHAR2,
+        p_fecha_nacimiento IN DATE
+    );
+
+    -- funcion para obtener edad
+    FUNCTION obtener_edad(
+        p_cliente_id IN NUMBER
+    ) RETURN NUMBER;
+END gestion_clientes;
+/
+
+-- creacion del cuerpo del paquete
+CREATE OR REPLACE PACKAGE BODY gestion_clientes AS
+
+    PROCEDURE registrar_cliente(
+        p_cliente_id IN NUMBER,
+        p_nombre IN VARCHAR2,
+        p_ciudad IN VARCHAR2,
+        p_fecha_nacimiento IN DATE
+    ) AS
+    BEGIN
+        -- se valida que la fecha no sea mayor a la actual
+        IF p_fecha_nacimiento >= SYSDATE THEN
+            RAISE_APPLICATION_ERROR(-20006, 'Error: La fecha de nacimiento debe ser menor a la fecha actual.');
+        END IF;
+
+        -- se inserta el nuevo cliente
+        INSERT INTO Clientes (ClienteID, Nombre, Ciudad, FechaNacimiento)
+        VALUES (p_cliente_id, p_nombre, p_ciudad, p_fecha_nacimiento);
+
+        -- se suma al contador global
+        var_global_clientes := var_global_clientes + 1;
+
+        -- se guardan los cambios
+        COMMIT;
+        
+        DBMS_OUTPUT.PUT_LINE('Cliente registrado con éxito: ' || p_nombre);
+        
+    EXCEPTION
+        WHEN DUP_VAL_ON_INDEX THEN
+            DBMS_OUTPUT.PUT_LINE('Error: El ClienteID ' || p_cliente_id || ' ya existe en el sistema.');
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Error al registrar cliente: ' || SQLERRM);
+    END registrar_cliente;
+
+    FUNCTION obtener_edad(
+        p_cliente_id IN NUMBER
+    ) RETURN NUMBER AS
+        var_fecha_nac DATE;
+        var_edad NUMBER;
+    BEGIN
+        -- se busca la fecha del cliente
+        SELECT FechaNacimiento
+        INTO var_fecha_nac
+        FROM Clientes
+        WHERE ClienteID = p_cliente_id;
+
+        -- se calcula la edad en base a la fecha de nacimiento
+        var_edad := TRUNC(MONTHS_BETWEEN(SYSDATE, var_fecha_nac) / 12);
+
+        RETURN var_edad;
+        
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            RAISE_APPLICATION_ERROR(-20007, 'Error: Cliente con ID ' || p_cliente_id || ' no existe.');
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Error al obtener la edad: ' || SQLERRM);
+            RETURN -1;
+    END obtener_edad;
+
+END gestion_clientes;
+/
+
+-- probando el paquete
+DECLARE
+    v_edad NUMBER;
+BEGIN
+    
+    -- se registran clientes nuevos
+    gestion_clientes.registrar_cliente(4, 'Christian Salazar', 'Santiago', TO_DATE('2002-12-05', 'YYYY-MM-DD'));
+    gestion_clientes.registrar_cliente(5, 'Miriam Perez', 'Concepcion', TO_DATE('2001-07-22', 'YYYY-MM-DD'));
+    
+    -- se muestra el contador global
+    DBMS_OUTPUT.PUT_LINE('Clientes registrados en esta sesión: ' || gestion_clientes.var_global_clientes);
+    
+    -- se calcula la edad del cliente
+    v_edad := gestion_clientes.obtener_edad(4);
+    DBMS_OUTPUT.PUT_LINE('Edad del clientecon id 4: ' || v_edad || ' años.');
+    
+    -- error
+    -- gestion_clientes.registrar_cliente(6, 'Juanito Perez', 'Santiago', TO_DATE('2030-01-01', 'YYYY-MM-DD'));
+    
+    DBMS_OUTPUT.PUT_LINE('--- FIN PRUEBA SESION 18 ---');
+END;
+/
+    
