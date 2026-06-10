@@ -1254,4 +1254,65 @@ BEGIN
     DBMS_OUTPUT.PUT_LINE('--- FIN PRUEBA SESION 18 ---');
 END;
 /
-    
+
+-- sesion 19
+
+-- 1) Diseña una estrategia de respaldo para el esquema curso_topicos. 
+-- Documenta la estrategia en comentarios y escribe un script RMAN 
+-- para un respaldo completo y un respaldo incremental.
+
+-- estrategia de respaldo
+-- - respaldo completo: se realiza cada domingo a las 23:00
+-- - respaldo incremental (nivel 1): se realiza diariamente a las 23:00
+-- - retención: se mantienen los respaldos de las últimas 2 semanas
+-- - ubicación: se guardan en el disco local (/home/usuario/documentos) y se sube una copia a la nube (AWS S3)
+
+-- script rman para hacer el respaldo completo
+rman target /
+
+CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 14 DAYS;
+CONFIGURE CHANNEL DEVICE TYPE DISK FORMAT '/home/usuario/documentos/%U';
+
+RUN {
+    BACKUP DATABASE PLUS ARCHIVELOG;
+    DELETE OBSOLETE;
+}
+
+-- script rman para hacer el respaldo incremental
+RUN {
+    BACKUP INCREMENTAL LEVEL 1 DATABASE;
+    BACKUP ARCHIVELOG ALL;
+}
+
+LIST BACKUP;
+
+
+-- 2) Simula un fallo eliminando la tabla Productos y recupera los datos usando Flashback
+-- (si está habilitado) o RMAN. Documenta el proceso.
+
+-- se simula el fallo borrando la tabla
+DROP TABLE Productos;
+
+-- se verifica que la tabla ya no existe
+SELECT COUNT(*) FROM Productos; -- error: la tabla no existe
+
+-- se recupera la tabla con flashback (si esta habilitado)
+FLASHBACK TABLE Productos TO BEFORE DROP;
+
+-- si flashback no esta habilitado, se usa rman para la restauracion
+rman target /
+
+SHUTDOWN IMMEDIATE;
+STARTUP MOUNT;
+RUN {
+    RESTORE TABLE curso_topicos.Productos;
+    RECOVER TABLE curso_topicos.Productos;
+}
+ALTER DATABASE OPEN;
+
+-- se verifica que los datos se recuperaron correctamente
+SELECT COUNT(*) FROM Productos; -- deberia mostrar 2 filas de datos
+
+
+
+
