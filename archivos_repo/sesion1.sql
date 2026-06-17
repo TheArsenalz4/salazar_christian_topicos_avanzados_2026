@@ -1,3 +1,5 @@
+-- Sesion 9 era prueba 1, sesion 20 repaso y sesion 21 prueba 2
+
 -- sesion1.sql: Script para la Sesión 1
 
 -- Detener la ejecución si ocurre un error
@@ -1313,6 +1315,43 @@ ALTER DATABASE OPEN;
 -- se verifica que los datos se recuperaron correctamente
 SELECT COUNT(*) FROM Productos; -- deberia mostrar 2 filas de datos
 
+-- Sesion 22
+
+-- 1) Diseña (sin script) una estrategia de alta disponibilidad para el esquema curso_topicos:
+-- Número de nodos y su ubicación geográfica.
+-- Tipo de replicación (síncrona o asíncrona).
+-- Uso de los nodos secundarios (por ejemplo, para reportes).
+-- Mecanismo de failover.
+
+-- estrategia de alta disponibilidad para curso_topicos
+-- - nodos:
+--   * nodo principal: se establece en santiago, chile
+--   * nodo standby: se establece en concepción, chile
+-- - replicación: se utiliza replicación síncrona mediante oracle data guard (modo de máxima protección)
+--   * motivo: se busca garantizar cero pérdida de datos (zero data loss) ante fallas físicas del sitio principal
+-- - uso del nodo standby:
+--   * se destina a consultas de solo lectura (como reportes de ventas) mediante active data guard
+-- - failover:
+--   * se configura fast-start failover para automatizar el cambio de rol al nodo standby ante fallas
+--   * mttr objetivo: se proyecta en un máximo de 5 minutos
+-- - consideraciones:
+--   * se complementa con el plan de respaldo completo semanal e incremental diario (definido en la sesión 19)
+--   * monitoreo: se implementa oracle enterprise manager para el envío de alertas y estados de salud
 
 
+-- 2) Escribe una consulta de solo lectura que podría ejecutarse en el nodo standby 
+-- para generar un reporte de ventas por cliente. Explica cómo aprovecharías 
+-- Active Data Guard.
 
+-- consulta de solo lectura para el nodo standby
+SELECT c.ClienteID, c.Nombre, SUM(p.Total) AS TotalVentas
+FROM Clientes c
+JOIN Pedidos p ON c.ClienteID = p.ClienteID
+WHERE p.FechaPedido BETWEEN TO_DATE('2025-01-01', 'YYYY-MM-DD') AND TO_DATE('2025-06-30', 'YYYY-MM-DD')
+GROUP BY c.ClienteID, c.Nombre
+ORDER BY TotalVentas DESC;
+
+-- uso de active data guard:
+-- - se mantiene el nodo standby abierto en modo de solo lectura mientras la replicación sigue activa desde el principal
+-- - se redirigen las consultas pesadas de reportes al standby para no consumir recursos de procesamiento en el principal
+-- - beneficio: se realiza balanceo de carga al dejar las escrituras (insert, update, delete) en santiago y los reportes en concepción
