@@ -995,6 +995,66 @@ SELECT v.Marca, v.obtener_antiguedad() as Antiguedad, TREAT(VALUE(V) AS Automovi
 from Vehiculos v
 WHERE VALUE(v) IS OF(Automovil);
 
+-- Sesion 15
+
+-- 1) Crea un índice compuesto en la tabla DetallesPedidos para las columnas PedidoID y 
+-- ProductoID. Luego, escribe una consulta que use este índice y analiza su plan de 
+-- ejecución.
+
+-- se crea el índice compuesto en la tabla detallespedidos
+CREATE INDEX idx_det_pedido_prod ON DetallesPedidos(PedidoID, ProductoID);
+
+-- se analiza el plan de ejecución de la consulta que utiliza el índice compuesto
+EXPLAIN PLAN FOR
+SELECT * FROM DetallesPedidos
+WHERE PedidoID = 101 AND ProductoID = 2;
+
+-- se visualiza el plan de ejecución generado en la sesión
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+-- se ejecuta la consulta de prueba
+SELECT * FROM DetallesPedidos
+WHERE PedidoID = 101 AND ProductoID = 2;
+
+
+-- 2) Crea una tabla Ventas particionada por hash usando la columna ClienteID (4 particiones). 
+-- Inserta datos de Pedidos y escribe una consulta que muestre el total de ventas por cliente, 
+-- verificando que las particiones se usen.
+
+-- se crea la tabla de ventas históricas particionada por hash en base al clienteid
+CREATE TABLE Ventas_Historicas (
+    VentaID NUMBER,
+    ClienteID NUMBER,
+    Total NUMBER,
+    FechaVenta DATE,
+    CONSTRAINT pk_ventas_historicas PRIMARY KEY (VentaID, ClienteID)
+)
+PARTITION BY HASH (ClienteID)
+PARTITIONS 4;
+
+-- se insertan los registros desde la tabla de pedidos
+INSERT INTO Ventas_Historicas (VentaID, ClienteID, Total, FechaVenta)
+SELECT PedidoID, ClienteID, Total, FechaPedido
+FROM Pedidos;
+
+-- se confirman los cambios
+COMMIT;
+
+-- se analiza el plan de ejecución de la agregación sobre la tabla particionada
+EXPLAIN PLAN FOR
+SELECT ClienteID, SUM(Total) AS TotalAcumulado
+FROM Ventas_Historicas
+GROUP BY ClienteID;
+
+-- se visualiza el plan de ejecución para comprobar el acceso a las particiones
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+-- se ejecuta la consulta final de reportes
+SELECT ClienteID, SUM(Total) AS TotalAcumulado
+FROM Ventas_Historicas
+GROUP BY ClienteID;
+
+
 -- Sesion 16 
 
 -- Analiza el plan de ejecución de la siguiente consulta y optimízala para que use índices y particiones.
@@ -1005,6 +1065,83 @@ WHERE c.ClienteID = p.ClienteID
 AND c.Ciudad = 'Santiago'
 AND p.FechaPedido >= TO_DATE('2025-03-01', 'YYYY-MM-DD')
 GROUP BY c.Nombre;
+
+-- plan de ejecucion inicial de la consulta
+EXPLAIN PLAN FOR
+SELECT c.Nombre, COUNT(p.PedidoID) AS TotalPedidos
+FROM Clientes c, Pedidos p
+WHERE c.ClienteID = p.ClienteID
+AND c.Ciudad = 'Santiago'
+AND p.FechaPedido >= TO_DATE('2025-03-01', 'YYYY-MM-DD')
+GROUP BY c.Nombre;
+
+-- se visualiza el plan de ejecucion antes de optimizar
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+-- optimizacion: se crea un indice en la columna ciudad de la tabla clientes para agilizar el filtro
+CREATE INDEX idx_clientes_ciudad_sgo ON Clientes(Ciudad);
+
+-- plan de ejecucion optimizado reescribiendo a join y forzando indices
+EXPLAIN PLAN FOR
+SELECT /*+ INDEX(c idx_clientes_ciudad_sgo) INDEX(p idx_pedidos_cliente) */
+    c.Nombre, COUNT(p.PedidoID) AS TotalPedidos
+FROM Clientes c
+JOIN Pedidos p ON c.ClienteID = p.ClienteID
+WHERE c.Ciudad = 'Santiago'
+AND p.FechaPedido >= TO_DATE('2025-03-01', 'YYYY-MM-DD')
+GROUP BY c.Nombre;
+
+-- se visualiza el plan de ejecucion optimizado
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+-- se ejecuta la consulta optimizada final
+SELECT c.Nombre, COUNT(p.PedidoID) AS TotalPedidos
+FROM Clientes c
+JOIN Pedidos p ON c.ClienteID = p.ClienteID
+WHERE c.Ciudad = 'Santiago'
+AND p.FechaPedido >= TO_DATE('2025-03-01', 'YYYY-MM-DD')
+GROUP BY c.Nombre;
+
+
+-- Optimiza la siguiente consulta para evitar un FULL TABLE SCAN en DetallesPedidos y analiza el plan de ejecución antes y después de la optimización.
+
+SELECT p.Nombre, SUM(dp.Cantidad * p.Precio) AS TotalVentas
+FROM Productos p, DetallesPedidos dp
+WHERE p.ProductoID = dp.ProductoID
+GROUP BY p.Nombre;
+
+-- plan de ejecucion inicial para evaluar el acceso a las tablas
+EXPLAIN PLAN FOR
+SELECT p.Nombre, SUM(dp.Cantidad * p.Precio) AS TotalVentas
+FROM Productos p, DetallesPedidos dp
+WHERE p.ProductoID = dp.ProductoID
+GROUP BY p.Nombre;
+
+-- se visualiza el plan de ejecucion original (se identificara full table scan)
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+-- optimizacion: se crea un indice en la clave foranea productoid de detallespedidos
+CREATE INDEX idx_detalles_prod_fk ON DetallesPedidos(ProductoID);
+
+-- plan de ejecucion optimizado utilizando join explicito y forzando el indice
+EXPLAIN PLAN FOR
+SELECT /*+ INDEX(dp idx_detalles_prod_fk) */
+    p.Nombre, SUM(dp.Cantidad * p.Precio) AS TotalVentas
+FROM Productos p
+JOIN DetallesPedidos dp ON p.ProductoID = dp.ProductoID
+GROUP BY p.Nombre;
+
+-- se visualiza el plan de ejecucion optimizado sin full scan
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+-- se ejecuta la consulta optimizada de ventas por producto
+SELECT p.Nombre, SUM(dp.Cantidad * p.Precio) AS TotalVentas
+FROM Productos p
+JOIN DetallesPedidos dp ON p.ProductoID = dp.ProductoID
+GROUP BY p.Nombre;
+
+
+
 
 -- sesion 17
 
@@ -1355,3 +1492,285 @@ ORDER BY TotalVentas DESC;
 -- - se mantiene el nodo standby abierto en modo de solo lectura mientras la replicación sigue activa desde el principal
 -- - se redirigen las consultas pesadas de reportes al standby para no consumir recursos de procesamiento en el principal
 -- - beneficio: se realiza balanceo de carga al dejar las escrituras (insert, update, delete) en santiago y los reportes en concepción
+
+
+-- Sesion 23
+
+-- 1) Diseña un modelo NoSQL para el esquema curso_topicos. 
+-- Documenta en comentarios cómo estructurarías los datos en MongoDB 
+-- (por ejemplo, qué datos embebes y por qué). Proporciona un ejemplo de un documento.
+
+-- modelo nosql para curso_topicos
+-- colección: clientes
+-- - se embeben los pedidos y sus respectivos detalles dentro del documento del cliente
+-- - se embeben los datos de productos en la sección de detalles para evitar consultas múltiples
+-- - motivo: se busca disminuir la necesidad de realizar operaciones join y aumentar la velocidad de lectura
+-- - consideración: si los datos del catálogo de productos cambiaran constantemente, se optaría por mantenerlos en una colección aparte
+
+-- ejemplo de documento de la colección clientes en mongodb
+-- (basado en maría gómez, clienteid 2, y su pedido 103)
+{
+  "ClienteID": 2,
+  "Nombre": "María Gómez",
+  "Ciudad": "Valparaiso",
+  "FechaNacimiento": "1985-10-20",
+  "Pedidos": [
+    {
+      "PedidoID": 103,
+      "Total": 800,
+      "FechaPedido": "2025-03-03",
+      "Detalles": [
+        { "ProductoID": 1, "Nombre": "Laptop", "Precio": 1200, "Cantidad": 1 }
+      ]
+    }
+  ]
+}
+
+
+-- 2) Escribe dos consultas en MongoDB:
+--  a) Una para obtener los clientes de una ciudad específica (por ejemplo, Santiago).
+-- 	b) Otra para calcular el número total de productos vendidos por producto.
+
+-- consulta 1: se buscan los clientes que pertenezcan a la ciudad de santiago
+db.clientes.find(
+  { "Ciudad": "Santiago" },
+  { "Nombre": 1, "Ciudad": 1, "_id": 0 }
+);
+
+-- resultado esperado:
+-- { "Nombre": "Juan Perez", "Ciudad": "Santiago" }
+-- { "Nombre": "Ana Lopez", "Ciudad": "Santiago" }
+
+
+-- consulta 2: se calcula la sumatoria de las unidades vendidas por cada producto
+db.clientes.aggregate([
+  { $unwind: "$Pedidos" },
+  { $unwind: "$Pedidos.Detalles" },
+  {
+    $group: {
+      _id: "$Pedidos.Detalles.Nombre",
+      total_unidades: { $sum: "$Pedidos.Detalles.Cantidad" }
+    }
+  }
+]);
+
+-- resultado esperado:
+-- { "_id": "Laptop", "total_unidades": 7 }
+-- { "_id": "Mouse", "total_unidades": 9 }
+
+-- Sesion 24
+-- (Siguiendo ejemplo de taller integrador de ppt)
+
+-- Define al menos dos roles (por ejemplo, "Usuario", "Administrador").
+-- Asigna permisos específicos a cada rol.
+-- Crea usuarios y asigna los roles.
+-- Documenta los cambios en mejoras_proyecto.sql.
+
+-- se crean los roles del sistema
+CREATE ROLE rol_operador;
+CREATE ROLE rol_administrador;
+
+-- se otorgan privilegios al rol de operador (lectura e inserción en productos y pedidos)
+GRANT SELECT, INSERT ON Productos TO rol_operador;
+GRANT SELECT, INSERT ON Pedidos TO rol_operador;
+
+-- se otorgan privilegios completos al administrador sobre las tablas del esquema
+GRANT ALL PRIVILEGES ON Clientes, Pedidos, Productos, DetallesPedidos, Ventas_Historicas TO rol_administrador;
+
+-- se crea el usuario operador y se le asigna el rol
+CREATE USER user_operador IDENTIFIED BY op123;
+GRANT CREATE SESSION TO user_operador;
+GRANT rol_operador TO user_operador;
+
+-- se crea el usuario administrador y se le asigna el rol
+CREATE USER user_administrador IDENTIFIED BY admin987;
+GRANT CREATE SESSION TO user_administrador;
+GRANT rol_administrador TO user_administrador;
+
+
+-- Selecciona una consulta crítica de tu proyecto (por ejemplo, un reporte).
+-- Ejecuta EXPLAIN PLAN y analiza el plan de ejecución.
+-- Aplica una mejora (por ejemplo, crear un índice, reescribir la consulta).
+-- Documenta los cambios y el nuevo plan de ejecución en mejoras_proyecto.sql.
+
+-- se analiza el plan de ejecución inicial de la consulta de agregación
+EXPLAIN PLAN FOR
+SELECT c.Nombre, SUM(p.Total) AS VentasTotales
+FROM Clientes c
+JOIN Pedidos p ON c.ClienteID = p.ClienteID
+GROUP BY c.Nombre;
+
+-- se visualiza el plan de ejecución original (se observa acceso completo TABLE ACCESS FULL en pedidos)
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+-- se crea un índice en la clave foránea para optimizar el acceso y la operación de reunión (join)
+CREATE INDEX idx_pedidos_cliente ON Pedidos(ClienteID);
+
+-- se analiza nuevamente el plan de ejecución para corroborar las mejoras
+EXPLAIN PLAN FOR
+SELECT c.Nombre, SUM(p.Total) AS VentasTotales
+FROM Clientes c
+JOIN Pedidos p ON c.ClienteID = p.ClienteID
+GROUP BY c.Nombre;
+
+-- se visualiza el nuevo plan de ejecución optimizado
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+
+-- Sesion 28 (Ejercicios practicos)
+
+-- Define qué es una transacción en una base de datos y explica cómo las propiedades ACID 
+-- garantizan su integridad. Proporciona un ejemplo de un procedimiento que registre un pedido 
+-- en la tabla Pedidos, usando savepoints para revertir la operación si el cliente no existe.
+
+-- una transaccion es una unidad de trabajo logica que agrupa un conjunto de operaciones sql.
+-- para asegurar la integridad de la base de datos, se deben cumplir las propiedades ACID:
+-- - atomicidad: se asegura que todas las operaciones se realicen correctamente o ninguna de ellas.
+-- - consistencia: se garantiza que la base de datos transicione solo entre estados validos y consistentes.
+-- - aislamiento: los cambios de una transaccion no son visibles para otras hasta que se realice el commit.
+-- - durabilidad: los cambios confirmados persisten en el tiempo incluso ante fallos del sistema.
+
+CREATE OR REPLACE PROCEDURE registrar_pedido_seguro (
+    p_cliente_id IN NUMBER,
+    p_total IN NUMBER,
+    p_fecha_pedido IN DATE
+) AS
+    v_cliente_existe NUMBER;
+BEGIN
+    -- se establece un punto de recuperacion antes de realizar la insercion
+    SAVEPOINT inicio_pedido;
+
+    -- se valida si el cliente existe en la base de datos
+    SELECT COUNT(*) INTO v_cliente_existe
+    FROM Clientes
+    WHERE ClienteID = p_cliente_id;
+
+    IF v_cliente_existe = 0 THEN
+        RAISE_APPLICATION_ERROR(-20001, 'el cliente especificado no existe.');
+    END IF;
+
+    -- se inserta el registro del nuevo pedido calculando el identificador maximo mas uno
+    INSERT INTO Pedidos (PedidoID, ClienteID, Total, FechaPedido)
+    VALUES ((SELECT NVL(MAX(PedidoID), 0) + 1 FROM Pedidos), p_cliente_id, p_total, p_fecha_pedido);
+
+    COMMIT;
+EXCEPTION
+    WHEN OTHERS THEN
+        -- en caso de error se deshacen las operaciones hasta el savepoint establecido
+        ROLLBACK TO inicio_pedido;
+        DBMS_OUTPUT.PUT_LINE('error detectado: ' || SQLERRM || '. operacion revertida.');
+END;
+/
+
+
+-- ¿Qué es un Data Warehouse y cómo se diferencia de una base de datos operativa en términos 
+-- de propósito y estructura? Diseña una tabla de hechos Fact_Inventario para analizar el 
+-- movimiento de productos (entradas y salidas) en la base de datos, 
+-- incluyendo claves foráneas y medidas adecuadas.
+
+-- un data warehouse es una base de datos corporativa diseñada para centralizar y analizar datos historicos de multiples fuentes.
+-- a diferencia de una base de datos operativa (oltp), orientada al procesamiento transaccional en tiempo real,
+-- el data warehouse (olap) se orienta al analisis multidimensional, consultas complejas de agregacion y toma de decisiones.
+-- su estructura suele estar desnormalizada en esquemas de estrella o copo de nieve para optimizar el rendimiento de las consultas.
+
+-- se definen las tablas de dimensiones previas para la integridad referencial de la tabla de hechos
+CREATE TABLE Dim_Producto (
+    ProductoID NUMBER PRIMARY KEY,
+    Nombre VARCHAR2(100),
+    Categoria VARCHAR2(50)
+);
+
+CREATE TABLE Dim_Tiempo (
+    FechaID NUMBER PRIMARY KEY,
+    Fecha DATE,
+    Anio NUMBER,
+    Mes NUMBER,
+    Dia NUMBER
+);
+
+-- se crea la tabla de hechos fact_inventario para registrar movimientos de productos
+CREATE TABLE Fact_Inventario (
+    FactID NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    ProductoID NUMBER,
+    FechaID NUMBER,
+    CantidadMovimiento NUMBER,
+    TipoMovimiento VARCHAR2(20),
+    CONSTRAINT fk_fact_inventario_producto FOREIGN KEY (ProductoID) REFERENCES Dim_Producto(ProductoID),
+    CONSTRAINT fk_fact_inventario_tiempo FOREIGN KEY (FechaID) REFERENCES Dim_Tiempo(FechaID)
+);
+
+
+-- Explica cómo se implementa la herencia en Oracle utilizando tipos de objetos y 
+-- la cláusula UNDER. Diseña una jerarquía de tipos para modelar clientes 
+-- (Cliente → ClientePremium) y crea un índice en la tabla Clientes para optimizar 
+-- consultas por Ciudad. Justifica tu elección.
+
+-- la herencia en oracle se implementa a traves del modelo objeto-relacional usando tipos de objetos.
+-- para esto, se define un tipo base con la opcion 'not final' indicando que puede ser heredado.
+-- posteriormente, se utiliza la clausula 'under' para declarar un subtipo que herede atributos y metodos del tipo padre,
+-- pudiendo agregar atributos adicionales u overriding para redefinir el comportamiento de metodos.
+
+CREATE OR REPLACE TYPE Tipo_Cliente AS OBJECT (
+    ClienteID NUMBER,
+    Nombre VARCHAR2(50),
+    Ciudad VARCHAR2(50),
+    MEMBER FUNCTION getDescuento RETURN NUMBER
+) NOT FINAL;
+/
+
+CREATE OR REPLACE TYPE BODY Tipo_Cliente AS
+    MEMBER FUNCTION getDescuento RETURN NUMBER IS
+    BEGIN 
+        RETURN 0; 
+    END;
+END;
+/
+
+CREATE OR REPLACE TYPE Tipo_ClientePremium UNDER Tipo_Cliente (
+    DescuentoAdicional NUMBER,
+    OVERRIDING MEMBER FUNCTION getDescuento RETURN NUMBER
+);
+/
+
+CREATE OR REPLACE TYPE BODY Tipo_ClientePremium AS
+    OVERRIDING MEMBER FUNCTION getDescuento RETURN NUMBER IS
+    BEGIN 
+        RETURN DescuentoAdicional; 
+    END;
+END;
+/
+
+-- se crea la tabla tipada de objetos de tipo_cliente (con nombre modificado para evitar conflictos con la existente)
+CREATE TABLE Clientes_Objetos OF Tipo_Cliente;
+
+-- se crea el indice sobre el atributo ciudad de la tabla tipada
+CREATE INDEX idx_clientes_obj_ciudad ON Clientes_Objetos (Ciudad);
+
+-- justificacion: se implementa el indice en el atributo ciudad dado que es un campo frecuentemente utilizado
+-- en clausulas where de reportes de segmentacion geografica, mejorando la velocidad de acceso y evitando escaneos completos de tabla.
+
+
+-- Crea un índice compuesto en DetallesPedidos para PedidoID y ProductoID. 
+-- Particiona Pedidos por rango de FechaPedido (mensual para 2025). 
+-- Escribe una consulta que sume Total por ClienteID en enero de 2025.
+
+-- se crea el indice compuesto en la tabla de detalles para agilizar consultas por pedidos y productos
+CREATE INDEX idx_detalles_pedido_prod ON DetallesPedidos (PedidoID, ProductoID);
+
+-- se realiza el particionamiento por rango sobre la tabla existente pedidos
+ALTER TABLE Pedidos MODIFY PARTITION BY RANGE (FechaPedido) (
+    PARTITION p_jan_2025 VALUES LESS THAN (TO_DATE('2025-02-01', 'YYYY-MM-DD')),
+    PARTITION p_feb_2025 VALUES LESS THAN (TO_DATE('2025-03-01', 'YYYY-MM-DD')),
+    PARTITION p_mar_2025 VALUES LESS THAN (TO_DATE('2025-04-01', 'YYYY-MM-DD')),
+    PARTITION p_max VALUES LESS THAN (MAXVALUE)
+);
+
+-- consulta que suma el total de ventas por cliente durante el mes de enero de 2025
+SELECT 
+    ClienteID,
+    SUM(Total) AS Total_Mensual
+FROM Pedidos
+WHERE FechaPedido BETWEEN TO_DATE('2025-01-01', 'YYYY-MM-DD') AND TO_DATE('2025-01-31', 'YYYY-MM-DD')
+GROUP BY ClienteID;
+
+
